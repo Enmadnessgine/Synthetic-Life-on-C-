@@ -1,0 +1,32 @@
+# C++ SFML Project - Artificial Life
+# Build artifacts and IDE files
+
+# CMake generated files
+build/
+CMakeCache.txt
+cmake_install.cmake
+*.dir/
+
+# Executables and objects
+*.exe
+*.obj
+*.o
+*.ilk
+*.pdb
+*.exp
+
+# Visual Studio
+*.vcxproj.user
+.vscode/
+*.filters
+*.props
+
+# Debug/Release folders
+Debug/
+Release/
+
+# SFML DLLs (these should be in repo for distribution, but not built)
+# sfml-*.dll
+
+# Temporary files
+*.tmp
