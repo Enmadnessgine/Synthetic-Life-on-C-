@@ -18,6 +18,7 @@ cmake_install.cmake
 # Visual Studio
 *.vcxproj.user
 .vscode/
+.kilo/
 *.filters
 *.props
 

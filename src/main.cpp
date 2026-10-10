@@ -1,33 +1,36 @@
-#include <SFML/Graphics.hpp>
 #include <SFML/Window.hpp>
+#include <vector>
+#include <memory>
+#include "entities/Entity.h"
 
 int main() {
-    sf::RenderWindow window(sf::VideoMode({1024, 768}), "Artificial Life - Step 1");
+    sf::RenderWindow window(sf::VideoMode({1024, 768}), "Artificial Life - Step 2");
     window.setFramerateLimit(60);
 
-    sf::CircleShape circle(50.f);
-    circle.setFillColor(sf::Color::Green);
-    circle.setPosition({window.getSize().x / 2.f, window.getSize().y / 2.f});
+    // Create entities container
+    std::vector<std::unique_ptr<Entity>> entities;
+    entities.push_back(std::make_unique<Entity>(sf::Vector2f(100.f, 100.f), sf::Vector2f(150.f, 100.f)));
 
-    sf::Vector2f velocity(200.f, 150.f);
     sf::Clock clock;
 
     while (window.isOpen()) {
-        if (const std::optional event = window.pollEvent(); event->is<sf::Event::Closed>())
+        // Event handling (SFML 3.0 style)
+        if (const std::optional event = window.pollEvent(); event.has_value() && event->is<sf::Event::Closed>()) {
             window.close();
+        }
 
         float dt = clock.restart().asSeconds();
 
-        circle.move(velocity * dt);
+        // Update entities
+        for (auto& entity : entities) {
+            entity->update(dt, window.getSize());
+        }
 
-        sf::Vector2u size = window.getSize();
-        if (circle.getPosition().x <= 0 || circle.getRadius() * 2 >= size.x)
-            velocity.x *= -1;
-        if (circle.getPosition().y <= 0 || circle.getRadius() * 2 >= size.y)
-            velocity.y *= -1;
-
+        // Draw
         window.clear(sf::Color::Black);
-        window.draw(circle);
+        for (const auto& entity : entities) {
+            entity->draw(window);
+        }
         window.display();
     }
 
