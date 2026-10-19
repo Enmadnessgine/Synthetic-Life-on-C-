@@ -10,6 +10,9 @@ int main() {
     // Create entities container
     std::vector<std::unique_ptr<Entity>> entities;
     entities.push_back(std::make_unique<Entity>(sf::Vector2f(100.f, 100.f), sf::Vector2f(150.f, 100.f)));
+    entities.push_back(std::make_unique<Entity>(sf::Vector2f(500.f, 300.f), sf::Vector2f(-100.f, 50.f)));
+    entities.push_back(std::make_unique<Entity>(sf::Vector2f(300.f, 600.f), sf::Vector2f(200.f, -75.f)));
+    entities.push_back(std::make_unique<Entity>(sf::Vector2f(800.f, 200.f), sf::Vector2f(-150.f, -100.f)));
 
     sf::Clock clock;
 

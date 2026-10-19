@@ -8,5 +8,5 @@ set(CMAKE_PREFIX_PATH "C:/SFML/SFML-3.0.0")
 
 find_package(SFML 3.0 COMPONENTS Graphics Window System REQUIRED)
 
-add_executable(ArtificialLife src/main.cpp src/entities/Entity.cpp)
+add_executable(ArtificialLife src/main.cpp src/entities/Entity.cpp src/spatial/SpatialGrid.cpp)
 target_link_libraries(ArtificialLife SFML::Graphics SFML::Window SFML::System)
