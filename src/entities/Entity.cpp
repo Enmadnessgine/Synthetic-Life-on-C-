@@ -9,10 +9,10 @@ Entity::Entity(sf::Vector2f position, sf::Vector2f velocity, OrganismType type)
     switch (type) {
         case OrganismType::Flora:
             // Флора: маленькі напівпрозорі зелені кружечки (фоновий шар)
-            // Радіус 5, прозорість 150 — вона на задньому плані.
+            // Радіус 7, прозорість 180 — краще видно на екрані.
             // Флора нерухома, не має поля зору.
-            shape_.setRadius(5.f);
-            shape_.setFillColor(sf::Color(0, 255, 0, 150));
+            shape_.setRadius(7.f);
+            shape_.setFillColor(sf::Color(0, 255, 0, 180));
             shape_.setOutlineThickness(0.f);
             genome_.maxSpeed = 0.f;
             genome_.visionRange = 0.f;
@@ -102,6 +102,38 @@ void Entity::update(float dt, const sf::Vector2u& windowSize) {
                 // Випадковий напрямок руху
                 float angle = static_cast<float>(std::rand()) / RAND_MAX * 2.f * 3.14159265f;
                 wanderDirection = sf::Vector2f(std::cos(angle), std::sin(angle));
+            }
+        }
+    }
+    else if (type_ == OrganismType::Predator) {
+        // Пріоритети для хижаків: SEEK_PREY > WANDER
+        // SEEK_PREY обробляється в main.cpp (потрібен доступ до SpatialGrid)
+
+        // WANDER behavior для хижаків — змінюють напрямок рідше (економія енергії)
+        if (currentPredatorState == PredatorState::WANDER) {
+            wanderTimer += dt;
+            if (wanderTimer >= 4.0f) {
+                wanderTimer = 0.f;
+                float angle = static_cast<float>(std::rand()) / RAND_MAX * 2.f * 3.14159265f;
+                wanderDirection = sf::Vector2f(std::cos(angle), std::sin(angle));
+            }
+        }
+    }
+
+    // --- FLEE TIMER: автоматичний вихід із стану втечі ---
+    if (type_ == OrganismType::Herbivore && currentHerbivoreState == HerbivoreState::FLEE) {
+        if (fleeTimer > 0.f) {
+            fleeTimer -= dt;
+            if (fleeTimer <= 0.f) {
+                // Час втечі вичерпано — повертаємось до стану за енергією
+                float energyPct = energy_ / 250.f;
+                if (energyPct < 0.60f) {
+                    setHerbivoreState(HerbivoreState::SEEK_FOOD);
+                } else if (energyPct >= 0.80f) {
+                    setHerbivoreState(HerbivoreState::SEEK_MATE);
+                } else {
+                    setHerbivoreState(HerbivoreState::WANDER);
+                }
             }
         }
     }

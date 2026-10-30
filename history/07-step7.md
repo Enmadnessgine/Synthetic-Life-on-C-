@@ -1,4 +1,4 @@
-# Step 7: Final Ecosystem Simulation (FSM v4 - Balanced with State Machines)
+# Step 7: Final Ecosystem Simulation (FSM v5 - Fixed Herbivore Extinction)
 
 ## Changes Committed
 - Rewrote `src/main.cpp` into a complete ecosystem simulation (Step 7 / Final Ecosystem)
@@ -64,6 +64,24 @@
 - **SpatialGrid:** ефективний пошук сусідів за обмеженими радіусами (не O(N²))
 - **Const correctness:** збережено архітектуру, використано існуючі методи
 
+## Critical Bug Fixes (Step 7.5) — Fix Herbivore Extinction
+
+### Root Causes Identified
+1. **FLEE state blocked eating** — herbivores in FLEE could not eat, starved while fleeing
+2. **Reproduction thresholds too high** — `std::max(80, 220*1.0) = 220` for herbivores, `max(400, 200*3) = 600` for predators
+3. **Predator vision too wide** — 250px (nearly full screen), herbivores perpetually fleeing
+3. **FLEE never ended** — no timer, herbivores fled indefinitely
+4. **Flora invisible at MAX_FLORA** — radius 5, alpha 150, invisible against black background
+
+### Fixes Applied
+- **Reproduction thresholds fixed:** Herbivore `max(80, 220*0.5) = 110`; Predator `max(400, 200*1.5) = 400`
+- **Vision ranges reduced:** Predator 250→150px; Herbivore predator detection 180→120px
+- **FLEE timer added:** 2.5s auto-exit back to energy-based state (SEEK_FOOD/SEEK_MATE/WANDER)
+- **Eating allowed during FLEE** — herbivores can eat while fleeing
+- **Flora visibility:** radius 5→7, alpha 150→180
+- **Predator vision reduced:** 250→150px (realistic, not full-screen)
+- **Herbivore predator detection reduced:** 180→120px (less panic)
+
 ## Біологічний сенс (для пояснення викладачу)
 - **Енергетична піраміда:** на кожному трофічному рівні втрачається ~90% енергії (правило 10%).
   Тому популяція стабілізується у пропорції приблизно 100:10:1 (Флора:Травоїдні:Хижаки).
@@ -71,13 +89,14 @@
 - **Вищий трофічний рівень = вищий поріг розмноження та вища метаболізм-вартість.**
 - **Візуальна ієрархія:** хижаки (верхній трофічний рівень) малюються поверх травоїдних, травоїдні поверх флори.
 - **FSM поведінка:** істоти приймають рішення на основі внутрішнього стану та оточення — не випадковий рух.
+- **FLEE таймер:** імітує адреналіновий ризик — короткостковий вирив втечі, потім повернення до життєво важливих задач.
 
 ## Key Files Modified
 | File | Change |
 |------|--------|
-| `src/main.cpp` | Full FSM interaction loop, limited vision, re-balancing, lerp smoothing, layered draw |
-| `src/entities/Entity.h` | FSM enums (`HerbivoreState`, `PredatorState`), state fields, getters/setters with logging |
-| `src/entities/Entity.cpp` | FSM state transitions in `update()`, type-specific metabolism, wander behavior, visual feedback |
+| `src/main.cpp` | Full FSM interaction loop, limited vision, re-balancing, lerp smoothing, layered draw, fixed thresholds |
+| `src/entities/Entity.h` | FSM enums, state fields, `fleeTimer`, getters/setters with logging |
+| `src/entities/Entity.cpp` | FSM state transitions in `update()`, flee timer auto-exit, type-specific metabolism, wander behavior, visual feedback, flora visibility |
 | `src/spatial/SpatialGrid.h` | Added `cellSize` ctor param, `clear()`, `getNearbyEntitiesOfType()` |
 | `src/spatial/SpatialGrid.cpp` | Implementations for new ctor, `clear()`, `getNearbyEntitiesOfType()` |
 

@@ -17,9 +17,9 @@ const int MAX_HERBIVORE = 100;
 const int MAX_PREDATOR = 15;
 
 // === ПОЛЯ ЗОРУ (обмежені, не весь екран) ===
-const float PREDATOR_VISION_RANGE = 250.f;         // Хижаки бачать здобич до 250px
+const float PREDATOR_VISION_RANGE = 150.f;         // Хижаки бачать здобич до 150px (менше за травоїдні в FLEE)
 const float HERBIVORE_FOOD_VISION = 200.f;         // Травоїдні бачать флору до 200px
-const float HERBIVORE_PREDATOR_VISION = 180.f;     // Травоїдні бачать хижаків до 180px
+const float HERBIVORE_PREDATOR_VISION = 120.f;     // Травоїдні бачать хижаків до 120px (коротший радіус небезпеки)
 const float HERBIVORE_MATE_VISION = 150.f;         // Травоїдні бачать партнерів до 150px
 
 // === ЕНЕРГІЯ ТА МЕТАБОЛІЗМ ===
@@ -175,6 +175,7 @@ int main() {
                     // FLEE: втеча від найближчого хижака
                     isFleeing = true;
                     entity->setHerbivoreState(Entity::HerbivoreState::FLEE);
+                    entity->setFleeTimer(2.5f); // Таймер втечі 2.5 секунди
 
                     // Знаходимо найближчого хижака
                     int closestPredIdx = nearbyPredators[0];
@@ -266,23 +267,21 @@ int main() {
                 sf::Vector2f newVel = lerpVelocity(currentVel, targetVelocity, 0.15f);
                 entity->setVelocity(newVel);
 
-                // === ПОЇДАННЯ ФЛОРИ (тільки якщо не FLEE) ===
-                if (!isFleeing) {
-                    auto foodTargets = grid.getNearbyEntitiesOfType(
-                        entity->getPosition(), 
-                        entity->getGenome().size + 20.f, // Невеликий буфер для зіткнення
-                        Entity::OrganismType::Flora, 
-                        entities
-                    );
-                    for (int idx : foodTargets) {
-                        auto& target = entities[idx];
-                        if (!target->isDead()) {
-                            float dist = getDistance(entity->getPosition(), target->getPosition());
-                            float collisionDist = entity->getGenome().size + target->getGenome().size;
-                            if (dist < collisionDist) {
-                                entity->addEnergy(HERBIVORE_EAT_ENERGY);   // +120 енергії
-                                target->addEnergy(-100.f);                  // Флора вмирає
-                            }
+                // === ПОЇДАННЯ ФЛОРИ (тепер і в FLEE, щоб травоїдні не голодували) ===
+                auto foodTargets = grid.getNearbyEntitiesOfType(
+                    entity->getPosition(), 
+                    entity->getGenome().size + 20.f, // Невеликий буфер для зіткнення
+                    Entity::OrganismType::Flora, 
+                    entities
+                );
+                for (int idx : foodTargets) {
+                    auto& target = entities[idx];
+                    if (!target->isDead()) {
+                        float dist = getDistance(entity->getPosition(), target->getPosition());
+                        float collisionDist = entity->getGenome().size + target->getGenome().size;
+                        if (dist < collisionDist) {
+                            entity->addEnergy(HERBIVORE_EAT_ENERGY);   // +120 енергії
+                            target->addEnergy(-100.f);                  // Флора вмирає
                         }
                     }
                 }
@@ -382,10 +381,10 @@ int main() {
                 float threshold;
                 if (eType == Entity::OrganismType::Herbivore) {
                     // Травоїдні розмножуються частіше (нижчий поріг)
-                    threshold = std::max(HERBIVORE_REPRO_THRESHOLD_BASE, entity->getGenome().maxSpeed * 1.0f);
+                    threshold = std::max(HERBIVORE_REPRO_THRESHOLD_BASE, entity->getGenome().maxSpeed * 0.5f);
                 } else if (eType == Entity::OrganismType::Predator) {
                     // Хижаки розмножуються рідше (вищий поріг)
-                    threshold = std::max(PREDATOR_REPRO_THRESHOLD_BASE, entity->getGenome().maxSpeed * 3.0f);
+                    threshold = std::max(PREDATOR_REPRO_THRESHOLD_BASE, entity->getGenome().maxSpeed * 1.5f);
                 } else {
                     threshold = std::max(120.f, entity->getGenome().maxSpeed * 1.2f);
                 }

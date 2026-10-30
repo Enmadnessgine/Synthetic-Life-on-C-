@@ -66,12 +66,14 @@ public:
     HerbivoreState getHerbivoreState() const { return currentHerbivoreState; }
     PredatorState getPredatorState() const { return currentPredatorState; }
     float getWanderTimer() const { return wanderTimer; }
+    float getFleeTimer() const { return fleeTimer; }
     sf::Vector2f getWanderDirection() const { return wanderDirection; }
 
     // Зміна стану з логуванням для дебагу
     void setHerbivoreState(HerbivoreState state);
     void setPredatorState(PredatorState state);
     void setWanderTimer(float t) { wanderTimer = t; }
+    void setFleeTimer(float t) { fleeTimer = t; }
     void setWanderDirection(sf::Vector2f dir) { wanderDirection = dir; }
 
     // Setters
@@ -94,4 +96,5 @@ private:
     PredatorState currentPredatorState = PredatorState::WANDER;
     float wanderTimer = 0.f;
     sf::Vector2f wanderDirection = sf::Vector2f(0.f, 0.f);
+    float fleeTimer = 0.f;  // Таймер для обмеження тривалості FLEE стану
 };
