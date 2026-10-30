@@ -10,10 +10,12 @@
 #include "entities/Entity.h"
 #include "spatial/SpatialGrid.h"
 
-// Ліміти популяції для стабілізації екосистеми
-const int MAX_FLORA = 500;
+// Ліміти популяції для стабілізації екосистеми (пропорція енергетичної піраміди ~100:10:1)
+// Біологічний сенс: на кожному трофічному рівні втрачається ~90% енергії (правило 10%),
+// тому хижаків має бути на порядок менше, ніж травоїдів, а травоїдів — ніж рослин.
+const int MAX_FLORA = 1000;
 const int MAX_HERBIVORE = 100;
-const int MAX_PREDATOR = 30;
+const int MAX_PREDATOR = 15;
 
 // Допоміжна функція для розрахунку відстані
 float getDistance(const sf::Vector2f& a, const sf::Vector2f& b) {
@@ -26,7 +28,7 @@ int main() {
     std::srand(static_cast<unsigned int>(std::time(nullptr))); // Ініціалізація генератора випадкових чисел
 
     // 1. Налаштування вікна
-    sf::RenderWindow window(sf::VideoMode({1024, 768}), "Artificial Life - Final Ecosystem");
+    sf::RenderWindow window(sf::VideoMode({1024, 768}), "Artificial Life - Balanced Ecosystem");
     window.setFramerateLimit(60);
     sf::Clock clock;
 
@@ -34,11 +36,15 @@ int main() {
     SpatialGrid grid(1024.f, 768.f, 100.f);
 
     // 3. Створення початкової популяції
+    // Початкові кількості зменшено для швидшо стабілізації екосистеми.
+    // Біологічний сенс: початкова біомаса має бути невеликою, щоб екосистема могла
+    // органічно зрости до рівноважної довкілях.
     std::vector<std::unique_ptr<Entity>> entities;
     
-    std::cout << "=== Ініціалізація екосистеми ===" << std::endl;
+    std::cout << "=== Ініціалізація збалансованої екосистеми ===" << std::endl;
 
-    // Флора (100 шт.)
+    // Флора (100 шт.) — продуктенти першого трофічного рівня
+    // Розмножуються шляхом фотосинтезу, не потребують їжі.
     for (int i = 0; i < 100; ++i) {
         float x = static_cast<float>(std::rand() % 1024);
         float y = static_cast<float>(std::rand() % 768);
@@ -47,7 +53,8 @@ int main() {
         entities.push_back(std::move(flora));
     }
 
-    // Травоїдні (20 шт.)
+    // Травоїдні (20 шт.) — споживачі другого трофічного рівня
+    // Їдять флору, отримуючи частину енергії рослин (згідно з правилом 10%).
     for (int i = 0; i < 20; ++i) {
         float x = static_cast<float>(std::rand() % 1024);
         float y = static_cast<float>(std::rand() % 768);
@@ -58,7 +65,8 @@ int main() {
         entities.push_back(std::move(herb));
     }
 
-    // Хижаки (8 шт.)
+    // Хижаки (8 шт.) — споживачі третього трофічного рівня
+    // Їдять травоїдних, отримаючи ще меншу частку енергії з ланцюга.
     for (int i = 0; i < 8; ++i) {
         float x = static_cast<float>(std::rand() % 1024);
         float y = static_cast<float>(std::rand() % 768);
@@ -70,7 +78,7 @@ int main() {
     }
     std::cout << "Створено істот. Загальна кількість: " << entities.size() << "\n" << std::endl;
 
-    // Таймери для розмноження
+    // Таймер для розмноження (асексуальне розмноження кожні 4 секунди)
     float asexualTimer = 0.f;
 
     // 4. Головний цикл симуляції
@@ -96,7 +104,7 @@ int main() {
             grid.addEntity(entities[i]->getPosition(), i);
         }
 
-        // Підрахунок поточної популяції для лімітів
+        // Підрахунок поточної популяції для лімітів (енергетична піраміда)
         int floraCount = 0, herbCount = 0, predCount = 0;
         for (const auto& e : entities) {
             if (e->getType() == Entity::OrganismType::Flora) floraCount++;
@@ -112,9 +120,11 @@ int main() {
             Entity::OrganismType type = entity->getType();
 
             if (type == Entity::OrganismType::Flora) {
-                // Фотосинтез (тільки якщо флори не забагато)
+                // Фотосинтез — флора накопичує енергію зі сонця
+                // Зменшено швидкість і заблоковано при достиженні ліміту популяції,
+                // щоб уникнути експоненційного зростання продуцентів.
                 if (floraCount < MAX_FLORA) {
-                    entity->addEnergy(12.f * dt);
+                    entity->addEnergy(18.f * dt);  // Збільшено з 12 до 18 для стабільного цукрового балансу
                 }
             } 
             else if (type == Entity::OrganismType::Herbivore) {
@@ -133,18 +143,18 @@ int main() {
 
                     auto& target = entities[closestIdx];
                     if (!target->isDead()) {
-                        // Рух до цілі (Seek)
+                        // Рух до цілі (Seek behavior)
                         sf::Vector2f dir = target->getPosition() - entity->getPosition();
                         float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
                         if (len > 0.f) {
                             entity->setVelocity((dir / len) * entity->getGenome().maxSpeed);
                         }
 
-                        // Поїдання
+                        // Поїдання флори: травоїдний отримує енергію, флора втрачає її
                         float collisionDist = entity->getGenome().size + target->getGenome().size;
                         if (minDist < collisionDist) {
-                            entity->addEnergy(80.f);       
-                            target->addEnergy(-100.f);     
+                            entity->addEnergy(80.f);        // Травоїдний отримує енергію з рослини
+                            target->addEnergy(-100.f);      // Флора втрачає енергію (биомаса зникає)
                         }
                     }
                 }
@@ -165,39 +175,50 @@ int main() {
 
                     auto& target = entities[closestIdx];
                     if (!target->isDead()) {
+                        // Рух до цілі (Seek behavior)
                         sf::Vector2f dir = target->getPosition() - entity->getPosition();
                         float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
                         if (len > 0.f) {
                             entity->setVelocity((dir / len) * entity->getGenome().maxSpeed);
                         }
 
+                        // Поїдання травоїдного: хижак отримує менше енергії, ніж раніше,
+                        // що імітує неefekтивність передачі енергії між трофічними рівнями.
                         float collisionDist = entity->getGenome().size + target->getGenome().size;
                         if (minDist < collisionDist) {
-                            entity->addEnergy(120.f);      
-                            target->addEnergy(-100.f);     
+                            entity->addEnergy(80.f);       // Зменшено з 120 до 80 — менше енергії, рідше розмноження
+                            target->addEnergy(-100.f);      // Травоїдний втрачає всю енергію (помер)
                         }
                     }
                 }
             }
         }
 
-        // --- КРОК Г: Розмноження ---
+        // --- КРОК Г: Розмноження (асексуальне клонування з мутацією) ---
         asexualTimer += dt;
         
         std::vector<std::unique_ptr<Entity>> newborns;
         
-        if (asexualTimer >= 4.0f) {
+        if (asexualTimer >= 4.0f) {  // Зменшено з 6 до 4 секунд — флора розмножується частіше
             int newFlora = 0, newHerb = 0, newPred = 0;
             for (auto& entity : entities) {
                 if (entity->isDead()) continue;
 
-                // Обмеж розмноження за лімітами популяції
+                // Обмеж розмноження за лімітами популяції (енергетична піраміда)
                 Entity::OrganismType eType = entity->getType();
                 if (eType == Entity::OrganismType::Flora && floraCount + newFlora >= MAX_FLORA) continue;
                 if (eType == Entity::OrganismType::Herbivore && herbCount + newHerb >= MAX_HERBIVORE) continue;
                 if (eType == Entity::OrganismType::Predator && predCount + newPred >= MAX_PREDATOR) continue;
                 
-                float threshold = std::max(120.f, entity->getGenome().maxSpeed * 1.2f);
+                // Поріг енергії для розмноження: хижакам потрібно значно більше енергії,
+                // оскільки на вищому трофічному рівні енергії доступно менше.
+                float threshold;
+                if (eType == Entity::OrganismType::Predator) {
+                    threshold = std::max(300.f, entity->getGenome().maxSpeed * 2.5f);  // Вищий поріг для хижаків
+                } else {
+                    threshold = std::max(120.f, entity->getGenome().maxSpeed * 1.2f);
+                }
+                
                 if (entity->getEnergy() >= threshold) {
                     float energyToPass = entity->getEnergy() * 0.4f;
                     entity->addEnergy(-energyToPass);
@@ -224,7 +245,7 @@ int main() {
                     child->addEnergy(energyToPass);
                     newborns.push_back(std::move(child));
 
-                    // Оновлюємо лічильники newborn для точного ліміту
+                    // Оновлюємо лічильники newborn для точного ліміту всередині одного тику
                     if (eType == Entity::OrganismType::Flora) newFlora++;
                     else if (eType == Entity::OrganismType::Herbivore) newHerb++;
                     else if (eType == Entity::OrganismType::Predator) newPred++;
@@ -238,6 +259,8 @@ int main() {
         }
 
         // --- КРОК Д: Очищення мертвих істот (Mark and Sweep) ---
+        // Істоми, енергія яких вичерпана (до 0), видаляються з симуляції.
+        // Біологічний сенс: голодова смерть — природний механізм регулювання популяції.
         entities.erase(
             std::remove_if(entities.begin(), entities.end(), 
                 [](const std::unique_ptr<Entity>& e) { return e->isDead(); }),

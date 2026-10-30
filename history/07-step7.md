@@ -1,4 +1,4 @@
-# Step 7: Final Ecosystem Simulation (Balanced)
+# Step 7: Final Ecosystem Simulation (Balanced v2)
 
 ## Changes Committed
 - Rewrote `src/main.cpp` into a complete ecosystem simulation (Step 7 / Final Ecosystem)
@@ -11,26 +11,34 @@
 - Added frame-rate-independent delta-time clamping (`dt` capped at 0.1s)
 - Added per-second console statistics output (Flora / Herbivore / Predator counts)
 - Collision distances now use `genome.size` instead of `getRadius()`
-- Reproduction threshold: `max(120.f, maxSpeed * 1.2f)`; parent passes 40% energy to child
 - Child mutation: `maxSpeed ±10`, `size ±2`, random offset position/velocity
 - Reproduction timer resets every frame (not just on success) to prevent retry spam
 
-## Ecosystem Balancing (Step 7.1)
-- **Population limits:** `MAX_FLORA=500`, `MAX_HERBIVORE=100`, `MAX_PREDATOR=30`
+## Ecosystem Balancing (Step 7.2)
+- **Population limits:** `MAX_FLORA=1000`, `MAX_HERBIVORE=100`, `MAX_PREDATOR=15` (пропорція ~100:10:1 енергетичної піраміди)
 - **Reduced initial population:** Flora 150→100, Herbivore 30→20, Predator 10→8
-- **Population counting** before interaction loop each frame
-- **Photosynthesis:** rate 25→12 `* dt`, disabled when `floraCount >= MAX_FLORA`
-- **Reproduction limits:** blocked per-type when population reaches cap (tracks newborns within tick to prevent overshoot)
-- **Energy from eating increased:** Herbivore→Flora 60→80, Predator→Herbivore 100→120 (better predator control of herbivores)
+- **Population counting** before interaction loop each frame (per-type tracking with newborn counts to prevent overshoot)
+- **Photosynthesis:** rate 25→18 `* dt`, disabled when `floraCount >= MAX_FLORA`
+- **Reproduction timer:** 6→4 seconds (флора розмножується частіше)
+- **Reproduction limits:** blocked per-type when population reaches cap
+- **Reproduction threshold (predators):** `max(300.f, maxSpeed * 2.5f)` (вищий поріг для хижаків vs `max(120.f, maxSpeed * 1.2f)` для інших)
+- **Energy from eating:** Herbivore→Flora 60→80; Predator→Herbivore 120→80 (менше енергії на вищому трофічному рівні — правило 10%)
+- **Metabolism (Entity.cpp):** base `0.015f`, predators `0.025f` (хижаки витрачають більше енергії на обмін речовин)
+
+## Біологічний сенс (для пояснення викладачу)
+- **Енергетична піраміда:** на кожному трофічному рівні втрачається ~90% енергії (правило 10%).
+  Тому популяція стабілізується у пропорції приблизно 100:10:1 (Флора:Травоїдні:Хижаки).
+- **Голодова смерть:** істоми, енергія яких вичерпана до 0, видаляються — природний механізм регулювання.
+- **Вищий трофічний рівень = вищий поріг розмноження та вища метаболізм-вартість.**
 
 ## Key Files Modified
 | File | Change |
 |------|--------|
-| `src/main.cpp` | Full ecosystem loop rewrite + balancing constants, population counting, capped photosynthesis, capped reproduction, increased eating energy |
-| `src/entities/Entity.h` | Added `OrganismType` enum, `getType()`, `setEnergy()`, `type_` member (from Step 4-6) |
-| `src/entities/Entity.cpp` | Type-based constructor (radius/color/speed per type), metabolism `0.02f`, energy color feedback (from Step 4-6) |
-| `src/spatial/SpatialGrid.h` | Added `cellSize` ctor param, `clear()`, `getNearbyEntitiesOfType()` (from Step 3-4) |
-| `src/spatial/SpatialGrid.cpp` | Implementations for new ctor, `clear()`, `getNearbyEntitiesOfType()` (from Step 3-4) |
+| `src/main.cpp` | Full ecosystem loop rewrite + balancing: population limits, counting, capped photosynthesis, capped reproduction, type-specific eating energy & thresholds |
+| `src/entities/Entity.h` | Added `OrganismType` enum, `getType()`, `setEnergy()`, `type_` member |
+| `src/entities/Entity.cpp` | Type-based constructor, type-aware metabolism (base 0.015f, predator 0.025f), energy color feedback |
+| `src/spatial/SpatialGrid.h` | Added `cellSize` ctor param, `clear()`, `getNearbyEntitiesOfType()` |
+| `src/spatial/SpatialGrid.cpp` | Implementations for new ctor, `clear()`, `getNearbyEntitiesOfType()` |
 
 ## Build
 - CMake generator: Visual Studio 17 2022 (x64) — SFML 3.0 libs are MSVC-format, incompatible with MinGW
