@@ -1,4 +1,5 @@
 #include "Entity.h"
+#include <cmath>
 
 Entity::Entity(sf::Vector2f position, sf::Vector2f velocity, OrganismType type)
     : position_(position), velocity_(velocity), energy_(100.f), type_(type)
@@ -7,54 +8,145 @@ Entity::Entity(sf::Vector2f position, sf::Vector2f velocity, OrganismType type)
 
     switch (type) {
         case OrganismType::Flora:
-            // Флора: маленькі напівпрозорі зелені кружечки (fonівий шар)
+            // Флора: маленькі напівпрозорі зелені кружечки (фоновий шар)
             // Радіус 5, прозорість 150 — вона на задньому плані.
+            // Флора нерухома, не має поля зору.
             shape_.setRadius(5.f);
             shape_.setFillColor(sf::Color(0, 255, 0, 150));
             shape_.setOutlineThickness(0.f);
             genome_.maxSpeed = 0.f;
+            genome_.visionRange = 0.f;
             break;
         case OrganismType::Herbivore:
             // Травоїдні: великі яскраві жовті/золоті кружечки з помаранчевим контуром
             // Радіус 12, прозорість 220 — середній шар візуальної ієрархії.
+            // Вища максимальна швидкість (220) щоб врятовуватися від хижаків.
             shape_.setRadius(12.f);
             shape_.setFillColor(sf::Color(255, 215, 0, 220));
             shape_.setOutlineColor(sf::Color(255, 140, 0, 220));
             shape_.setOutlineThickness(2.f);
-            genome_.maxSpeed = 150.f;
+            genome_.maxSpeed = 220.f;   // Збільшено з 150 до 220 для врятовування
+            genome_.visionRange = 200.f; // Поле зору для пошуку флори
             break;
         case OrganismType::Predator:
             // Хижаки: великі яскраво-червоні кружечки з жовтим контуром (верхній шар)
             // Радіус 18, непрозорі — завжди видно поверх усіх інших істот.
+            // Швидкість 200 — трохи нижче за травоїдних у режимі втечі (260).
             shape_.setRadius(18.f);
             shape_.setFillColor(sf::Color(255, 0, 0, 255));
             shape_.setOutlineColor(sf::Color(255, 255, 0, 255));
             shape_.setOutlineThickness(3.f);
-            genome_.maxSpeed = 200.f;
+            genome_.maxSpeed = 200.f;   // Трохи нижче за FLEE-швидкість травоїдних
+            genome_.visionRange = 250.f; // Поле зору для пошуку здобичі (не весь екран!)
             break;
     }
 }
 
+void Entity::setHerbivoreState(HerbivoreState state) {
+    if (currentHerbivoreState != state) {
+        currentHerbivoreState = state;
+        // Відладочний вивід при зміні стану (для викладача)
+        // std::cout << "[FSM] Herbivore state changed to: " << static_cast<int>(state) << std::endl;
+    }
+}
+
+void Entity::setPredatorState(PredatorState state) {
+    if (currentPredatorState != state) {
+        currentPredatorState = state;
+        // Відладочний вивід при зміні стану (для викладача)
+        // std::cout << "[FSM] Predator state changed to: " << static_cast<int>(state) << std::endl;
+    }
+}
+
 void Entity::update(float dt, const sf::Vector2u& windowSize) {
-    // --- ІНТЕГРАЦІЯ ПОЗИЦІЇ (критично для руху) ---
+    // --- КРОК 1: ІНТЕГРАЦІЯ ПОЗИЦІЇ (критично для руху) ---
     position_ += velocity_ * dt;
 
-    // Metabolism: energy decreases based on maxSpeed
-    // Хижаки витрачають більше енергії на метаболізм (вищий обмін речовин)
-    float metabolism_multiplier = (type_ == Entity::OrganismType::Predator) ? 0.025f : 0.015f;
+    // --- КРОК 2: МЕНЕДЖЕР СТАНІВ (FSM) ---
+    // Перевірка умов переходу станів на основі внутрішніх показників (енергія)
+    // ФLEE обробляється в main.cpp (потрібен доступ до SpatialGrid і позицій хижаків)
+
+    if (type_ == OrganismType::Herbivore) {
+        // Пріоритети для травоїдних: FLEE > SEEK_MATE > SEEK_FOOD > WANDER
+        // FLEE обробляється в main.cpp. Тут обробляємо решта на основі енергії.
+        float energyPct = energy_ / 250.f; // Початкова енергія травоїдного = 250
+
+        if (energyPct >= 0.80f) {
+            // Достатньо енергії для розмноження (> 80%)
+            if (currentHerbivoreState != HerbivoreState::SEEK_MATE) {
+                setHerbivoreState(HerbivoreState::SEEK_MATE);
+            }
+        }
+        else if (energyPct < 0.60f) {
+            // Низька енергія — шукаємо їжу (< 60%)
+            if (currentHerbivoreState != HerbivoreState::SEEK_FOOD) {
+                setHerbivoreState(HerbivoreState::SEEK_FOOD);
+            }
+        }
+        else {
+            // Нормальна енергія (60-80%) — блукання, якщо не в іншому стані
+            if (currentHerbivoreState == HerbivoreState::WANDER) {
+                // Залишаємося в WANDER
+            }
+            else if (currentHerbivoreState != HerbivoreState::WANDER &&
+                     currentHerbivoreState != HerbivoreState::FLEE) {
+                setHerbivoreState(HerbivoreState::WANDER);
+            }
+        }
+
+        // WANDER behavior — періодична зміна напрямку кожні 2-3 секунди
+        if (currentHerbivoreState == HerbivoreState::WANDER) {
+            wanderTimer += dt;
+            if (wanderTimer >= 2.5f) {
+                wanderTimer = 0.f;
+                // Випадковий напрямок руху
+                float angle = static_cast<float>(std::rand()) / RAND_MAX * 2.f * 3.14159265f;
+                wanderDirection = sf::Vector2f(std::cos(angle), std::sin(angle));
+            }
+        }
+    }
+    else if (type_ == OrganismType::Predator) {
+        // Пріоритети для хижаків: SEEK_PREY > WANDER
+        // SEEK_PREY обробляється в main.cpp (потрібен доступ до SpatialGrid)
+
+        // WANDER behavior для хижаків — змінюють напрямок рідше (економія енергії)
+        if (currentPredatorState == PredatorState::WANDER) {
+            wanderTimer += dt;
+            if (wanderTimer >= 4.0f) {
+                wanderTimer = 0.f;
+                float angle = static_cast<float>(std::rand()) / RAND_MAX * 2.f * 3.14159265f;
+                wanderDirection = sf::Vector2f(std::cos(angle), std::sin(angle));
+            }
+        }
+    }
+
+    // --- КРОК 3: МЕТАБОЛІЗМ ---
+    // Травоїдні витрачають менше енергії (зменшено з 0.015 до 0.010)
+    // Хижаки витрачають більше енергії (збільшено з 0.018 до 0.022)
+    float metabolism_multiplier;
+    if (type_ == OrganismType::Predator) {
+        metabolism_multiplier = 0.022f;  // Хижаки швидше голодують
+    } else if (type_ == OrganismType::Herbivore) {
+        metabolism_multiplier = 0.010f;  // Травоїдні витрачають менше енергії
+    } else {
+        metabolism_multiplier = 0.0f;    // Флора не має метаболізму (фотосинтез у main.cpp)
+    }
     float metabolism_cost = genome_.maxSpeed * metabolism_multiplier;
     energy_ -= metabolism_cost * dt;
 
-    // Bounce off walls
+    // --- КРОК 4: Відбивання від стін ---
     if (position_.x <= 0.f || position_.x >= static_cast<float>(windowSize.x)) {
         velocity_.x *= -1.f;
+        position_.x = (position_.x <= 0.f) ? 0.f : static_cast<float>(windowSize.x);
     }
     if (position_.y <= 0.f || position_.y >= static_cast<float>(windowSize.y)) {
         velocity_.y *= -1.f;
+        position_.y = (position_.y <= 0.f) ? 0.f : static_cast<float>(windowSize.y);
     }
 
-    // Visual feedback: alpha based on energy, preserve base type colour
-    float alpha = energy_ / 100.f;
+    // --- КРОК 5: Візуальний фідбек ---
+    // Прозорість залежить від енергії, базовий колір типу зберігається
+    float alpha = energy_ / 250.f;
     if (alpha < 0.1f) alpha = 0.1f; // Ніколи не стає цілком невидимою
     sf::Color baseColor = shape_.getFillColor();
     shape_.setFillColor(sf::Color(baseColor.r, baseColor.g, baseColor.b,

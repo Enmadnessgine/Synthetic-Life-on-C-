@@ -1,4 +1,4 @@
-# Step 7: Final Ecosystem Simulation (Balanced v3 - Visual Hierarchy)
+# Step 7: Final Ecosystem Simulation (FSM v4 - Balanced with State Machines)
 
 ## Changes Committed
 - Rewrote `src/main.cpp` into a complete ecosystem simulation (Step 7 / Final Ecosystem)
@@ -35,19 +35,49 @@
 - **Black background** for maximum contrast
 - **CRITICAL FIX:** `position_ += velocity_ * dt` added to `Entity::update()` — entities now actually move (was missing, causing all organisms to stand still)
 
+## Finite State Machine (FSM) & Re-balancing (Step 7.4)
+
+### FSM: стани поведінки
+- **Herbivore (4 стани):** 
+  - `SEEK_FOOD` — енергія < 60%, шукає найближчу флору
+  - `FLEE` — хижак у радіусі 180px, втеча з +20% швидкості (264), найвищий пріоритет
+  - `SEEK_MATE` — енергія > 80%, рух до центру маси сусідніх травоїдних
+  - `WANDER` — стандартний стан, випадковий напрямок кожні 2.5с
+- **Predator (2 стани):**
+  - `SEEK_PREY` — травоїдна у радіусі 250px, переслідування
+  - `WANDER` — повільне блукання (економія енергії), зміна напрямку кожні 4с
+
+### Обмежене поле зору (реалістичне)
+- **Predator:** 250px (не бачать весь екран!)
+- **Herbivore:** їжа 200px, хижаки 180px, партнери 150px
+
+### Re-balancing (портяння травоїдних від вимирання)
+- **Метаболізм:** Herbivore 0.015→0.010 (економніші), Predator 0.025→0.022 (швидше голодують)
+- **Енергія від поїдання:** Herbivore 80→120 (флора більш поживна), Predator 80→100 (м'ясо менш поживне)
+- **Початкові умови:** Herbivore 20→40 шт., енергія 150→250; Predator 8 шт., енергія 300
+- **Швидкості:** Herbivore max 220, FLEE 264 (+20% адреналін); Predator 200 (ніжче за FLEE травоїдних)
+- **Розмноження:** Herbivore поріг 80 (частіше), Predator поріг 400 (рідше)
+
+### Технічні покращення
+- **Плавні переходи (lerp):** `current + (target - current) * 0.15` — без "смикання"
+- **Пріоритети FSM:** FLEE > SEEK_MATE > SEEK_FOOD > WANDER (травоїдні); SEEK_PREY > WANDER (хижаки)
+- **SpatialGrid:** ефективний пошук сусідів за обмеженими радіусами (не O(N²))
+- **Const correctness:** збережено архітектуру, використано існуючі методи
+
 ## Біологічний сенс (для пояснення викладачу)
 - **Енергетична піраміда:** на кожному трофічному рівні втрачається ~90% енергії (правило 10%).
   Тому популяція стабілізується у пропорції приблизно 100:10:1 (Флора:Травоїдні:Хижаки).
 - **Голодова смерть:** істоми, енергія яких вичерпана до 0, видаляються — природний механізм регулювання.
 - **Вищий трофічний рівень = вищий поріг розмноження та вища метаболізм-вартість.**
-- **Візуальна ієрархія:** хижаки (верхній трофічний рівень) малюються поверх травоїдних, травоїдні поверх флори — поєднується з енергетичною пірамідою.
+- **Візуальна ієрархія:** хижаки (верхній трофічний рівень) малюються поверх травоїдних, травоїдні поверх флори.
+- **FSM поведінка:** істоти приймають рішення на основі внутрішнього стану та оточення — не випадковий рух.
 
 ## Key Files Modified
 | File | Change |
 |------|--------|
-| `src/main.cpp` | Full ecosystem loop + balancing + layered draw order + increased initial speeds + biological comments |
-| `src/entities/Entity.h` | Added `OrganismType` enum, `getType()`, `setEnergy()`, `type_` member |
-| `src/entities/Entity.cpp` | Type-based constructor (radius/color/outline per type), type-aware metabolism (base 0.015f, predator 0.025f), energy-based alpha feedback preserving base colour |
+| `src/main.cpp` | Full FSM interaction loop, limited vision, re-balancing, lerp smoothing, layered draw |
+| `src/entities/Entity.h` | FSM enums (`HerbivoreState`, `PredatorState`), state fields, getters/setters with logging |
+| `src/entities/Entity.cpp` | FSM state transitions in `update()`, type-specific metabolism, wander behavior, visual feedback |
 | `src/spatial/SpatialGrid.h` | Added `cellSize` ctor param, `clear()`, `getNearbyEntitiesOfType()` |
 | `src/spatial/SpatialGrid.cpp` | Implementations for new ctor, `clear()`, `getNearbyEntitiesOfType()` |
 

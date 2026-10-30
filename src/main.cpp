@@ -10,12 +10,42 @@
 #include "entities/Entity.h"
 #include "spatial/SpatialGrid.h"
 
-// Ліміти популяції для стабілізації екосистеми (пропорція енергетичної піраміди ~100:10:1)
-// Біологічний сенс: на кожному трофічному рівні втрачається ~90% енергії (правило 10%),
-// тому хижаків має бути на порядок менше, ніж травоїдів, а травоїдів — ніж рослин.
+// === КОНСТАНТИ БАЛАНСУ ===
+// Енергетична піраміда ~100:10:1
 const int MAX_FLORA = 1000;
 const int MAX_HERBIVORE = 100;
 const int MAX_PREDATOR = 15;
+
+// === ПОЛЯ ЗОРУ (обмежені, не весь екран) ===
+const float PREDATOR_VISION_RANGE = 250.f;         // Хижаки бачать здобич до 250px
+const float HERBIVORE_FOOD_VISION = 200.f;         // Травоїдні бачать флору до 200px
+const float HERBIVORE_PREDATOR_VISION = 180.f;     // Травоїдні бачать хижаків до 180px
+const float HERBIVORE_MATE_VISION = 150.f;         // Травоїдні бачать партнерів до 150px
+
+// === ЕНЕРГІЯ ТА МЕТАБОЛІЗМ ===
+const float HERBIVORE_METABOLISM_MULT = 0.010f;    // Травоїдні витрачають менше енергії
+const float PREDATOR_METABOLISM_MULT = 0.022f;     // Хижаки швидше голодують
+
+// === ЕНЕРГІЯ ВІД ПОЇДАННЯ ===
+const float HERBIVORE_EAT_ENERGY = 120.f;          // Збільшено з 80 -> 120
+const float PREDATOR_EAT_ENERGY = 100.f;           // Зменшено з 80 -> 100 (менш поживне)
+
+// === ШВИДКІСТІ ===
+const float HERBIVORE_MAX_SPEED = 220.f;           // Збільшено з 150
+const float HERBIVORE_FLEE_SPEED = 264.f;          // 20% швидше за нормальний (220 * 1.2)
+const float PREDATOR_MAX_SPEED = 200.f;            // Трохи нижче за FLEE травоїдних
+
+// === ПОРОГИ РОЗМНОЖЕННЯ ===
+const float HERBIVORE_REPRO_THRESHOLD_BASE = 80.f; // Нижчий поріг для травоїдних
+const float PREDATOR_REPRO_THRESHOLD_BASE = 400.f; // Вищий поріг для хижаків
+
+// === ПОЧАТКОВІ УМОВИ ===
+const int INITIAL_FLORA = 100;
+const int INITIAL_HERBIVORE = 40;                  // Збільшено з 20 до 40
+const int INITIAL_PREDATOR = 8;                    // Зменшено з 15 до 8
+const float INITIAL_FLORA_ENERGY = 100.f;
+const float INITIAL_HERBIVORE_ENERGY = 250.f;      // Збільшено з 150 до 250 (фора на старті)
+const float INITIAL_PREDATOR_ENERGY = 300.f;       // Збільшено з 200 до 300
 
 // Допоміжна функція для розрахунку відстані
 float getDistance(const sf::Vector2f& a, const sf::Vector2f& b) {
@@ -24,11 +54,16 @@ float getDistance(const sf::Vector2f& a, const sf::Vector2f& b) {
     return std::sqrt(dx * dx + dy * dy);
 }
 
+// Плавна інтерполяція швидкості (lerp) для уникнення "смикання"
+sf::Vector2f lerpVelocity(const sf::Vector2f& current, const sf::Vector2f& target, float factor) {
+    return current + (target - current) * factor;
+}
+
 int main() {
-    std::srand(static_cast<unsigned int>(std::time(nullptr))); // Ініціалізація генератора випадкових чисел
+    std::srand(static_cast<unsigned int>(std::time(nullptr))); // Ініціалізація RNG
 
     // 1. Налаштування вікна
-    sf::RenderWindow window(sf::VideoMode({1024, 768}), "Artificial Life - Balanced Ecosystem");
+    sf::RenderWindow window(sf::VideoMode({1024, 768}), "Artificial Life - FSM Ecosystem");
     window.setFramerateLimit(60);
     sf::Clock clock;
 
@@ -36,44 +71,40 @@ int main() {
     SpatialGrid grid(1024.f, 768.f, 100.f);
 
     // 3. Створення початкової популяції
-    // Початкові кількості зменшено для швидшо стабілізації екосистеми.
-    // Біологічний сенс: початкова біомаса має бути невеликою, щоб екосистема могла
-    // органічно зрости до рівноважної довкілях.
     std::vector<std::unique_ptr<Entity>> entities;
     
-    std::cout << "=== Ініціалізація збалансованої екосистеми ===" << std::endl;
+    std::cout << "=== Ініціалізація FSM-екосистеми ===" << std::endl;
 
-    // Флора (100 шт.) — продуктенти першого трофічного рівня
-    // Розмножуються шляхом фотосинтезу, не потребують їжі.
-    for (int i = 0; i < 100; ++i) {
+    // Флора (100 шт.) — продуценти першого трофічного рівня
+    for (int i = 0; i < INITIAL_FLORA; ++i) {
         float x = static_cast<float>(std::rand() % 1024);
         float y = static_cast<float>(std::rand() % 768);
         auto flora = std::make_unique<Entity>(sf::Vector2f(x, y), sf::Vector2f(0.f, 0.f), Entity::OrganismType::Flora);
-        flora->addEnergy(100.f);
+        flora->addEnergy(INITIAL_FLORA_ENERGY);
         entities.push_back(std::move(flora));
     }
 
-    // Травоїдні (20 шт.) — великі яскраві жовті кружечки
-    // Початкова швидкість збільшена (діапазон ±150 замість ±100).
-    for (int i = 0; i < 20; ++i) {
+    // Травоїдні (40 шт.) — споживачі другого трофічного рівня
+    for (int i = 0; i < INITIAL_HERBIVORE; ++i) {
         float x = static_cast<float>(std::rand() % 1024);
         float y = static_cast<float>(std::rand() % 768);
-        float vx = static_cast<float>((std::rand() % 300) - 150);  // Більший діапазон (було ±100)
+        // Початкова швидкість ±150
+        float vx = static_cast<float>((std::rand() % 300) - 150);
         float vy = static_cast<float>((std::rand() % 300) - 150);
         auto herb = std::make_unique<Entity>(sf::Vector2f(x, y), sf::Vector2f(vx, vy), Entity::OrganismType::Herbivore);
-        herb->addEnergy(150.f);
+        herb->addEnergy(INITIAL_HERBIVORE_ENERGY); // 250 енергії — фора на старті
         entities.push_back(std::move(herb));
     }
 
-    // Хижаки (8 шт.) — великі яскраво-червоні кружечки, верхній шар
-    // Початкова швидкість ще більша (діапазон ±200 замість ±100).
-    for (int i = 0; i < 8; ++i) {
+    // Хижаки (8 шт.) — споживачі третього трофічного рівня
+    for (int i = 0; i < INITIAL_PREDATOR; ++i) {
         float x = static_cast<float>(std::rand() % 1024);
         float y = static_cast<float>(std::rand() % 768);
-        float vx = static_cast<float>((std::rand() % 400) - 200);  // Ще більший діапазон (було ±100)
-        float vy = static_cast<float>((std::rand() % 400) - 200);
+        // Початкова швидкість ±100
+        float vx = static_cast<float>((std::rand() % 200) - 100);
+        float vy = static_cast<float>((std::rand() % 200) - 100);
         auto pred = std::make_unique<Entity>(sf::Vector2f(x, y), sf::Vector2f(vx, vy), Entity::OrganismType::Predator);
-        pred->addEnergy(200.f);
+        pred->addEnergy(INITIAL_PREDATOR_ENERGY); // 300 енергії
         entities.push_back(std::move(pred));
     }
     std::cout << "Створено істот. Загальна кількість: " << entities.size() << "\n" << std::endl;
@@ -93,7 +124,7 @@ int main() {
             }
         }
 
-        // --- КРОК А: Оновлення фізики та метаболізму ---
+        // --- КРОК А: Оновлення фізики, метаболізму та FSM переходів ( внутрішні умови) ---
         for (auto& entity : entities) {
             entity->update(dt, window.getSize());
         }
@@ -104,7 +135,7 @@ int main() {
             grid.addEntity(entities[i]->getPosition(), i);
         }
 
-        // Підрахунок поточної популяції для лімітів (енергетична піраміда)
+        // Підрахунок поточної популяції для лімітів
         int floraCount = 0, herbCount = 0, predCount = 0;
         for (const auto& e : entities) {
             if (e->getType() == Entity::OrganismType::Flora) floraCount++;
@@ -112,7 +143,7 @@ int main() {
             else if (e->getType() == Entity::OrganismType::Predator) predCount++;
         }
 
-        // --- КРОК В: Харчовий ланцюг (Взаємодії) ---
+        // --- КРОК В: FSM поведінка та харчовий ланцюг (використання SpatialGrid) ---
         for (size_t i = 0; i < entities.size(); ++i) {
             auto& entity = entities[i];
             if (entity->isDead()) continue;
@@ -120,52 +151,164 @@ int main() {
             Entity::OrganismType type = entity->getType();
 
             if (type == Entity::OrganismType::Flora) {
-                // Фотосинтез — флора накопичує енергію зі сонця
-                // Зменшено швидкість і заблоковано при достиженні ліміту популяції,
-                // щоб уникнути експоненційного зростання продуцентів.
+                // ФОТОСИНТЕЗ — флора накопичує енергію зі сонця
+                // Обмежуємо фотосинтез при досягненні ліміту популяції флори
                 if (floraCount < MAX_FLORA) {
-                    entity->addEnergy(18.f * dt);  // Збільшено з 12 до 18 для стабільного цукрового балансу
+                    entity->addEnergy(18.f * dt);
                 }
             } 
             else if (type == Entity::OrganismType::Herbivore) {
-                auto targets = grid.getNearbyEntitiesOfType(entity->getPosition(), entity->getGenome().visionRange, Entity::OrganismType::Flora, entities);
-                if (!targets.empty()) {
-                    int closestIdx = targets[0];
-                    float minDist = getDistance(entity->getPosition(), entities[closestIdx]->getPosition());
-                    
-                    for (int idx : targets) {
+                // === FSM ДЛЯ ТРАВОЇДНИХ ===
+                // Пріоритет 1: FLEE (втеча від хижака) — найвищий пріоритет
+                // Перевіряємо наявність хижаків у радіусі небезпеки
+                auto nearbyPredators = grid.getNearbyEntitiesOfType(
+                    entity->getPosition(), 
+                    HERBIVORE_PREDATOR_VISION, 
+                    Entity::OrganismType::Predator, 
+                    entities
+                );
+
+                sf::Vector2f targetVelocity(0.f, 0.f);
+                bool isFleeing = false;
+
+                if (!nearbyPredators.empty()) {
+                    // FLEE: втеча від найближчого хижака
+                    isFleeing = true;
+                    entity->setHerbivoreState(Entity::HerbivoreState::FLEE);
+
+                    // Знаходимо найближчого хижака
+                    int closestPredIdx = nearbyPredators[0];
+                    float minDist = getDistance(entity->getPosition(), entities[closestPredIdx]->getPosition());
+                    for (int idx : nearbyPredators) {
                         float dist = getDistance(entity->getPosition(), entities[idx]->getPosition());
                         if (dist < minDist) {
                             minDist = dist;
-                            closestIdx = idx;
+                            closestPredIdx = idx;
                         }
                     }
 
-                    auto& target = entities[closestIdx];
-                    if (!target->isDead()) {
-                        // Рух до цілі (Seek behavior)
-                        sf::Vector2f dir = target->getPosition() - entity->getPosition();
-                        float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
-                        if (len > 0.f) {
-                            entity->setVelocity((dir / len) * entity->getGenome().maxSpeed);
-                        }
+                    // Рух у напрямку, протилежному до хижака
+                    sf::Vector2f dir = entity->getPosition() - entities[closestPredIdx]->getPosition();
+                    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+                    if (len > 0.f) {
+                        targetVelocity = (dir / len) * HERBIVORE_FLEE_SPEED; // Адреналін: +20% швидкості
+                    }
+                } 
+                else {
+                    // FLEE не потрібний — перевіряємо внутрішній стан (установлений в Entity::update на основі енергії)
+                    Entity::HerbivoreState state = entity->getHerbivoreState();
 
-                        // Поїдання флори: травоїдний отримує енергію, флора втрачає її
-                        float collisionDist = entity->getGenome().size + target->getGenome().size;
-                        if (minDist < collisionDist) {
-                            entity->addEnergy(80.f);        // Травоїдний отримує енергію з рослини
-                            target->addEnergy(-100.f);      // Флора втрачає енергію (биомаса зникає)
+                    if (state == Entity::HerbivoreState::SEEK_FOOD) {
+                        // ПОШУК ЇЖІ: шукаємо найближчу флору
+                        auto targets = grid.getNearbyEntitiesOfType(
+                            entity->getPosition(), 
+                            HERBIVORE_FOOD_VISION, 
+                            Entity::OrganismType::Flora, 
+                            entities
+                        );
+                        if (!targets.empty()) {
+                            int closestIdx = targets[0];
+                            float minDist = getDistance(entity->getPosition(), entities[closestIdx]->getPosition());
+                            for (int idx : targets) {
+                                float dist = getDistance(entity->getPosition(), entities[idx]->getPosition());
+                                if (dist < minDist) {
+                                    minDist = dist;
+                                    closestIdx = idx;
+                                }
+                            }
+                            auto& target = entities[closestIdx];
+                            if (!target->isDead()) {
+                                sf::Vector2f dir = target->getPosition() - entity->getPosition();
+                                float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+                                if (len > 0.f) {
+                                    targetVelocity = (dir / len) * HERBIVORE_MAX_SPEED;
+                                }
+                            }
+                        }
+                    } 
+                    else if (state == Entity::HerbivoreState::SEEK_MATE) {
+                        // ПОШУК ПАРТНЕРА: рухаємося до центру маси сусідніх травоїдних
+                        auto targets = grid.getNearbyEntitiesOfType(
+                            entity->getPosition(), 
+                            HERBIVORE_MATE_VISION, 
+                            Entity::OrganismType::Herbivore, 
+                            entities
+                        );
+                        if (!targets.empty()) {
+                            // Середня позиція сусідніх травоїдних
+                            sf::Vector2f avgPos(0.f, 0.f);
+                            int count = 0;
+                            for (int idx : targets) {
+                                avgPos += entities[idx]->getPosition();
+                                count++;
+                            }
+                            if (count > 0) {
+                                avgPos /= static_cast<float>(count);
+                                sf::Vector2f dir = avgPos - entity->getPosition();
+                                float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+                                if (len > 0.f) {
+                                    targetVelocity = (dir / len) * HERBIVORE_MAX_SPEED;
+                                }
+                            }
+                        }
+                    } 
+                    else { // WANDER
+                        // БЛУКАННЯ: використовуємо збережений напрямок
+                        sf::Vector2f wanderDir = entity->getWanderDirection();
+                        if (std::abs(wanderDir.x) > 0.001f || std::abs(wanderDir.y) > 0.001f) {
+                            targetVelocity = wanderDir * (HERBIVORE_MAX_SPEED * 0.5f); // Повільніше при блуканні
+                        }
+                    }
+                }
+
+                // === Плавна інтерполяція швидкості (lerp) ===
+                sf::Vector2f currentVel = entity->getVelocity();
+                sf::Vector2f newVel = lerpVelocity(currentVel, targetVelocity, 0.15f);
+                entity->setVelocity(newVel);
+
+                // === ПОЇДАННЯ ФЛОРИ (тільки якщо не FLEE) ===
+                if (!isFleeing) {
+                    auto foodTargets = grid.getNearbyEntitiesOfType(
+                        entity->getPosition(), 
+                        entity->getGenome().size + 20.f, // Невеликий буфер для зіткнення
+                        Entity::OrganismType::Flora, 
+                        entities
+                    );
+                    for (int idx : foodTargets) {
+                        auto& target = entities[idx];
+                        if (!target->isDead()) {
+                            float dist = getDistance(entity->getPosition(), target->getPosition());
+                            float collisionDist = entity->getGenome().size + target->getGenome().size;
+                            if (dist < collisionDist) {
+                                entity->addEnergy(HERBIVORE_EAT_ENERGY);   // +120 енергії
+                                target->addEnergy(-100.f);                  // Флора вмирає
+                            }
                         }
                     }
                 }
             } 
             else if (type == Entity::OrganismType::Predator) {
-                auto targets = grid.getNearbyEntitiesOfType(entity->getPosition(), entity->getGenome().visionRange, Entity::OrganismType::Herbivore, entities);
-                if (!targets.empty()) {
-                    int closestIdx = targets[0];
+                // === FSM ДЛЯ ХИЖАКІВ ===
+                // Пріоритет 1: SEEK_PREY (переслідування здобичі)
+                
+                auto nearbyPrey = grid.getNearbyEntitiesOfType(
+                    entity->getPosition(), 
+                    PREDATOR_VISION_RANGE, 
+                    Entity::OrganismType::Herbivore, 
+                    entities
+                );
+
+                sf::Vector2f targetVelocity(0.f, 0.f);
+                bool isHunting = false;
+
+                if (!nearbyPrey.empty()) {
+                    // SEEK_PREY: переслідування найближчої травоїдної
+                    isHunting = true;
+                    entity->setPredatorState(Entity::PredatorState::SEEK_PREY);
+
+                    int closestIdx = nearbyPrey[0];
                     float minDist = getDistance(entity->getPosition(), entities[closestIdx]->getPosition());
-                    
-                    for (int idx : targets) {
+                    for (int idx : nearbyPrey) {
                         float dist = getDistance(entity->getPosition(), entities[idx]->getPosition());
                         if (dist < minDist) {
                             minDist = dist;
@@ -175,46 +318,74 @@ int main() {
 
                     auto& target = entities[closestIdx];
                     if (!target->isDead()) {
-                        // Рух до цілі (Seek behavior)
                         sf::Vector2f dir = target->getPosition() - entity->getPosition();
                         float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
                         if (len > 0.f) {
-                            entity->setVelocity((dir / len) * entity->getGenome().maxSpeed);
+                            targetVelocity = (dir / len) * PREDATOR_MAX_SPEED;
                         }
+                    }
+                } 
+                else {
+                    // WANDER: повільне блукання для економії енергії
+                    entity->setPredatorState(Entity::PredatorState::WANDER);
+                    sf::Vector2f wanderDir = entity->getWanderDirection();
+                    if (std::abs(wanderDir.x) > 0.001f || std::abs(wanderDir.y) > 0.001f) {
+                        targetVelocity = wanderDir * (PREDATOR_MAX_SPEED * 0.3f); // Дуже повільно при блуканні
+                    }
+                }
 
-                        // Поїдання травоїдного: хижак отримує менше енергії, ніж раніше,
-                        // що імітує неefekтивність передачі енергії між трофічними рівнями.
-                        float collisionDist = entity->getGenome().size + target->getGenome().size;
-                        if (minDist < collisionDist) {
-                            entity->addEnergy(80.f);       // Зменшено з 120 до 80 — менше енергії, рідше розмноження
-                            target->addEnergy(-100.f);      // Травоїдний втрачає всю енергію (помер)
+                // Плавна інтерполяція швидкості
+                sf::Vector2f currentVel = entity->getVelocity();
+                sf::Vector2f newVel = lerpVelocity(currentVel, targetVelocity, 0.15f);
+                entity->setVelocity(newVel);
+
+                // === ПОЇДАННЯ ТРАВОЇДНОЇ ===
+                if (isHunting) {
+                    auto preyTargets = grid.getNearbyEntitiesOfType(
+                        entity->getPosition(), 
+                        entity->getGenome().size + 20.f,
+                        Entity::OrganismType::Herbivore, 
+                        entities
+                    );
+                    for (int idx : preyTargets) {
+                        auto& target = entities[idx];
+                        if (!target->isDead()) {
+                            float dist = getDistance(entity->getPosition(), target->getPosition());
+                            float collisionDist = entity->getGenome().size + target->getGenome().size;
+                            if (dist < collisionDist) {
+                                entity->addEnergy(PREDATOR_EAT_ENERGY);    // +100 енергії
+                                target->addEnergy(-100.f);                 // Травоїдна вмирає
+                            }
                         }
                     }
                 }
             }
         }
 
-        // --- КРОК Г: Розмноження (асексуальне клонування з мутацією) ---
+        // --- КРОК Г: РОЗМНОЖЕННЯ (асексуальне клонування з мутацією) ---
         asexualTimer += dt;
         
         std::vector<std::unique_ptr<Entity>> newborns;
         
-        if (asexualTimer >= 4.0f) {  // Зменшено з 6 до 4 секунд — флора розмножується частіше
+        if (asexualTimer >= 4.0f) {
             int newFlora = 0, newHerb = 0, newPred = 0;
             for (auto& entity : entities) {
                 if (entity->isDead()) continue;
 
-                // Обмеж розмноження за лімітами популяції (енергетична піраміда)
+                // Обмеж розмноження за лімітами популяції
                 Entity::OrganismType eType = entity->getType();
                 if (eType == Entity::OrganismType::Flora && floraCount + newFlora >= MAX_FLORA) continue;
                 if (eType == Entity::OrganismType::Herbivore && herbCount + newHerb >= MAX_HERBIVORE) continue;
                 if (eType == Entity::OrganismType::Predator && predCount + newPred >= MAX_PREDATOR) continue;
                 
-                // Поріг енергії для розмноження: хижакам потрібно значно більше енергії,
-                // оскільки на вищому трофічному рівні енергії доступно менше.
+                // Поріг енергії для розмноження за типом
                 float threshold;
-                if (eType == Entity::OrganismType::Predator) {
-                    threshold = std::max(300.f, entity->getGenome().maxSpeed * 2.5f);  // Вищий поріг для хижаків
+                if (eType == Entity::OrganismType::Herbivore) {
+                    // Травоїдні розмножуються частіше (нижчий поріг)
+                    threshold = std::max(HERBIVORE_REPRO_THRESHOLD_BASE, entity->getGenome().maxSpeed * 1.0f);
+                } else if (eType == Entity::OrganismType::Predator) {
+                    // Хижаки розмножуються рідше (вищий поріг)
+                    threshold = std::max(PREDATOR_REPRO_THRESHOLD_BASE, entity->getGenome().maxSpeed * 3.0f);
                 } else {
                     threshold = std::max(120.f, entity->getGenome().maxSpeed * 1.2f);
                 }
@@ -259,17 +430,13 @@ int main() {
         }
 
         // --- КРОК Д: Очищення мертвих істот (Mark and Sweep) ---
-        // Істоми, енергія яких вичерпана (до 0), видаляються з симуляції.
-        // Біологічний сенс: голодова смерть — природний механізм регулювання популяції.
         entities.erase(
             std::remove_if(entities.begin(), entities.end(), 
                 [](const std::unique_ptr<Entity>& e) { return e->isDead(); }),
             entities.end()
         );
 
-        // --- КРОК Е: Рендеринг ---
-        // Візуальна ієрархія: хижаки малюються поверх травоїдних, травоїдні поверх флори.
-        // Це гарантує, що хижаки завжди видимі, незалежно від кількості рослин.
+        // --- КРОК Е: РЕНДЕРИНГ (шари: Флора -> Травоїдні -> Хижаки) ---
         window.clear(sf::Color::Black); // Чорний фон для максимального контрасту
 
         // 1. Спочатку малюємо флору (фоновий шар, напівпрозора)
@@ -286,7 +453,7 @@ int main() {
             }
         }
 
-        // 3. Останними хижаки (верхній шар, завжди поверх усіх)
+        // 3. Останні хижаки (верхній шар, завжди поверх усіх)
         for (const auto& entity : entities) {
             if (entity->getType() == Entity::OrganismType::Predator) {
                 entity->draw(window);
@@ -294,7 +461,7 @@ int main() {
         }
         window.display();
 
-        // Відладочний вивід статистики кожну секунду
+        // --- Відладочний вивід статистики кожну секунду ---
         static int frameCount = 0;
         if (++frameCount % 60 == 0) {
             int flora = 0, herb = 0, pred = 0;

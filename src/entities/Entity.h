@@ -1,6 +1,7 @@
 #pragma once
 
 #include <SFML/Graphics.hpp>
+#include <iostream>
 
 // Genome struct controls inheritable genetic traits
 struct Genome {
@@ -22,6 +23,26 @@ class Entity {
 public:
     enum class OrganismType { Flora, Herbivore, Predator };
 
+    // === FSM: Stani поведінки травоїдних (Herbivore) ===
+    // SEEK_FOOD   — пошук їжі (флори) при низькій енергії
+    // FLEE        — втеча від хижака (найвищий пріоритет — виживання)
+    // SEEK_MATE   — пошук партнера для розмноження при высокій енергії
+    // WANDER      — блукання (стандартний стан, немає нагальних потреб)
+    enum class HerbivoreState {
+        SEEK_FOOD,
+        FLEE,
+        SEEK_MATE,
+        WANDER
+    };
+
+    // === FSM: Stani поведінки хижаків (Predator) ===
+    // SEEK_PREY   — переслідування здобичі (травоїдних)
+    // WANDER      — повільне блукання для економії енергії
+    enum class PredatorState {
+        SEEK_PREY,
+        WANDER
+    };
+
     Entity(sf::Vector2f position, sf::Vector2f velocity, OrganismType type);
 
     void update(float dt, const sf::Vector2u& windowSize);
@@ -41,6 +62,18 @@ public:
     void setEnergy(float amount) { energy_ = amount; }
     bool isDead() const { return energy_ <= 0.f; }
 
+    // === FSM: Getters/Setters для станів ===
+    HerbivoreState getHerbivoreState() const { return currentHerbivoreState; }
+    PredatorState getPredatorState() const { return currentPredatorState; }
+    float getWanderTimer() const { return wanderTimer; }
+    sf::Vector2f getWanderDirection() const { return wanderDirection; }
+
+    // Зміна стану з логуванням для дебагу
+    void setHerbivoreState(HerbivoreState state);
+    void setPredatorState(PredatorState state);
+    void setWanderTimer(float t) { wanderTimer = t; }
+    void setWanderDirection(sf::Vector2f dir) { wanderDirection = dir; }
+
     // Setters
     void setVelocity(sf::Vector2f velocity) { velocity_ = velocity; }
     void setPosition(sf::Vector2f position) { position_ = position; shape_.setPosition(position); }
@@ -54,5 +87,11 @@ private:
     sf::CircleShape shape_;
     Genome genome_;
     float energy_ = 100.f;
-    OrganismType type_;  // Starting energy
+    OrganismType type_;
+
+    // === FSM: Поля стану ===
+    HerbivoreState currentHerbivoreState = HerbivoreState::WANDER;
+    PredatorState currentPredatorState = PredatorState::WANDER;
+    float wanderTimer = 0.f;
+    sf::Vector2f wanderDirection = sf::Vector2f(0.f, 0.f);
 };
