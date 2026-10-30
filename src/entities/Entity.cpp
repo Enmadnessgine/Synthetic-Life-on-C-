@@ -166,14 +166,17 @@ void Entity::update(float dt, const sf::Vector2u& windowSize) {
     float metabolism_cost = genome_.maxSpeed * metabolism_multiplier;
     energy_ -= metabolism_cost * dt;
 
-    // --- КРОК 4: Відбивання від стін ---
-    if (position_.x <= 0.f || position_.x >= static_cast<float>(windowSize.x)) {
-        velocity_.x *= -1.f;
-        position_.x = (position_.x <= 0.f) ? 0.f : static_cast<float>(windowSize.x);
+    // --- КРОК 4: Тороїдна топологія (wrap-around) ---
+    // Коли клітина виходить за край екрану, вона з'являється з протилежного боку
+    if (position_.x < 0.f) {
+        position_.x += static_cast<float>(windowSize.x);
+    } else if (position_.x >= static_cast<float>(windowSize.x)) {
+        position_.x -= static_cast<float>(windowSize.x);
     }
-    if (position_.y <= 0.f || position_.y >= static_cast<float>(windowSize.y)) {
-        velocity_.y *= -1.f;
-        position_.y = (position_.y <= 0.f) ? 0.f : static_cast<float>(windowSize.y);
+    if (position_.y < 0.f) {
+        position_.y += static_cast<float>(windowSize.y);
+    } else if (position_.y >= static_cast<float>(windowSize.y)) {
+        position_.y -= static_cast<float>(windowSize.y);
     }
 
     // --- КРОК 5: Візуальний фідбек ---
