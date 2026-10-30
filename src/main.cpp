@@ -53,25 +53,25 @@ int main() {
         entities.push_back(std::move(flora));
     }
 
-    // Травоїдні (20 шт.) — споживачі другого трофічного рівня
-    // Їдять флору, отримуючи частину енергії рослин (згідно з правилом 10%).
+    // Травоїдні (20 шт.) — великі яскраві жовті кружечки
+    // Початкова швидкість збільшена (діапазон ±150 замість ±100).
     for (int i = 0; i < 20; ++i) {
         float x = static_cast<float>(std::rand() % 1024);
         float y = static_cast<float>(std::rand() % 768);
-        float vx = static_cast<float>((std::rand() % 200) - 100);
-        float vy = static_cast<float>((std::rand() % 200) - 100);
+        float vx = static_cast<float>((std::rand() % 300) - 150);  // Більший діапазон (було ±100)
+        float vy = static_cast<float>((std::rand() % 300) - 150);
         auto herb = std::make_unique<Entity>(sf::Vector2f(x, y), sf::Vector2f(vx, vy), Entity::OrganismType::Herbivore);
         herb->addEnergy(150.f);
         entities.push_back(std::move(herb));
     }
 
-    // Хижаки (8 шт.) — споживачі третього трофічного рівня
-    // Їдять травоїдних, отримаючи ще меншу частку енергії з ланцюга.
+    // Хижаки (8 шт.) — великі яскраво-червоні кружечки, верхній шар
+    // Початкова швидкість ще більша (діапазон ±200 замість ±100).
     for (int i = 0; i < 8; ++i) {
         float x = static_cast<float>(std::rand() % 1024);
         float y = static_cast<float>(std::rand() % 768);
-        float vx = static_cast<float>((std::rand() % 200) - 100);
-        float vy = static_cast<float>((std::rand() % 200) - 100);
+        float vx = static_cast<float>((std::rand() % 400) - 200);  // Ще більший діапазон (було ±100)
+        float vy = static_cast<float>((std::rand() % 400) - 200);
         auto pred = std::make_unique<Entity>(sf::Vector2f(x, y), sf::Vector2f(vx, vy), Entity::OrganismType::Predator);
         pred->addEnergy(200.f);
         entities.push_back(std::move(pred));
@@ -268,9 +268,29 @@ int main() {
         );
 
         // --- КРОК Е: Рендеринг ---
-        window.clear(sf::Color::Black);
+        // Візуальна ієрархія: хижаки малюються поверх травоїдних, травоїдні поверх флори.
+        // Це гарантує, що хижаки завжди видимі, незалежно від кількості рослин.
+        window.clear(sf::Color::Black); // Чорний фон для максимального контрасту
+
+        // 1. Спочатку малюємо флору (фоновий шар, напівпрозора)
         for (const auto& entity : entities) {
-            entity->draw(window);
+            if (entity->getType() == Entity::OrganismType::Flora) {
+                entity->draw(window);
+            }
+        }
+
+        // 2. Потім травоїдні (середній шар, яскравіші за флору)
+        for (const auto& entity : entities) {
+            if (entity->getType() == Entity::OrganismType::Herbivore) {
+                entity->draw(window);
+            }
+        }
+
+        // 3. Останними хижаки (верхній шар, завжди поверх усіх)
+        for (const auto& entity : entities) {
+            if (entity->getType() == Entity::OrganismType::Predator) {
+                entity->draw(window);
+            }
         }
         window.display();
 

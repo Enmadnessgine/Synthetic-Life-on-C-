@@ -7,18 +7,29 @@ Entity::Entity(sf::Vector2f position, sf::Vector2f velocity, OrganismType type)
 
     switch (type) {
         case OrganismType::Flora:
-            shape_.setRadius(20.f);
-            shape_.setFillColor(sf::Color::Green);
+            // Флора: маленькі напівпрозорі зелені кружечки (fonівий шар)
+            // Радіус 5, прозорість 150 — вона на задньому плані.
+            shape_.setRadius(5.f);
+            shape_.setFillColor(sf::Color(0, 255, 0, 150));
+            shape_.setOutlineThickness(0.f);
             genome_.maxSpeed = 0.f;
             break;
         case OrganismType::Herbivore:
-            shape_.setRadius(15.f);
-            shape_.setFillColor(sf::Color::Yellow);
+            // Травоїдні: великі яскраві жовті/золоті кружечки з помаранчевим контуром
+            // Радіус 12, прозорість 220 — середній шар візуальної ієрархії.
+            shape_.setRadius(12.f);
+            shape_.setFillColor(sf::Color(255, 215, 0, 220));
+            shape_.setOutlineColor(sf::Color(255, 140, 0, 220));
+            shape_.setOutlineThickness(2.f);
             genome_.maxSpeed = 150.f;
             break;
         case OrganismType::Predator:
-            shape_.setRadius(25.f);
-            shape_.setFillColor(sf::Color::Red);
+            // Хижаки: великі яскраво-червоні кружечки з жовтим контуром (верхній шар)
+            // Радіус 18, непрозорі — завжди видно поверх усіх інших істот.
+            shape_.setRadius(18.f);
+            shape_.setFillColor(sf::Color(255, 0, 0, 255));
+            shape_.setOutlineColor(sf::Color(255, 255, 0, 255));
+            shape_.setOutlineThickness(3.f);
             genome_.maxSpeed = 200.f;
             break;
     }
@@ -39,24 +50,12 @@ void Entity::update(float dt, const sf::Vector2u& windowSize) {
         velocity_.y *= -1.f;
     }
 
-    // Visual feedback: alpha and color based on energy levels
+    // Visual feedback: alpha based on energy, preserve base type colour
     float alpha = energy_ / 100.f;
-    if (energy_ < 30.f) {
-        // Low energy: dark red
-        unsigned char r = static_cast<unsigned char>(255 * (energy_ / 30.f));
-        unsigned char g = static_cast<unsigned char>(255 * (energy_ / 30.f));
-        unsigned char b = 0;
-        shape_.setFillColor(sf::Color(r, g, b, static_cast<unsigned char>(255 * alpha)));
-    } else if (energy_ < 60.f) {
-        // Medium energy: yellowish
-        unsigned char r = 255;
-        unsigned char g = static_cast<unsigned char>(255 * (energy_ / 100.f));
-        unsigned char b = 0;
-        shape_.setFillColor(sf::Color(r, g, b, static_cast<unsigned char>(255 * alpha)));
-    } else {
-        // High energy: green
-        shape_.setFillColor(sf::Color(0, 255, 0, static_cast<unsigned char>(255 * alpha)));
-    }
+    if (alpha < 0.1f) alpha = 0.1f; // Ніколи не стає цілком невидимою
+    sf::Color baseColor = shape_.getFillColor();
+    shape_.setFillColor(sf::Color(baseColor.r, baseColor.g, baseColor.b,
+        static_cast<unsigned char>(baseColor.a * alpha)));
 
     shape_.setPosition(position_);
 }

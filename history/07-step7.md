@@ -1,4 +1,4 @@
-# Step 7: Final Ecosystem Simulation (Balanced v2)
+# Step 7: Final Ecosystem Simulation (Balanced v3 - Visual Hierarchy)
 
 ## Changes Committed
 - Rewrote `src/main.cpp` into a complete ecosystem simulation (Step 7 / Final Ecosystem)
@@ -25,18 +25,28 @@
 - **Energy from eating:** Herbivore→Flora 60→80; Predator→Herbivore 120→80 (менше енергії на вищому трофічному рівні — правило 10%)
 - **Metabolism (Entity.cpp):** base `0.015f`, predators `0.025f` (хижаки витрачають більше енергії на обмін речовин)
 
+## Visual Hierarchy (Step 7.3)
+- **Flora:** radius 5, semi-transparent green (alpha 150) — фоновий шар
+- **Herbivore:** radius 12, bright gold (255,215,0,220) with orange outline — середній шар
+- **Predator:** radius 18, opaque bright red (255,0,0,255) with yellow outline — верхній шар
+- **Initial speeds increased:** Herbivore ±150 (was ±100), Predator ±200 (was ±100)
+- **Draw order layered:** Flora drawn first → Herbivores → Predators last (predators always visible on top)
+- **Energy feedback:** alpha modulated by energy, base type colour preserved (no longer overridden by energy-based color shifts)
+- **Black background** for maximum contrast
+
 ## Біологічний сенс (для пояснення викладачу)
 - **Енергетична піраміда:** на кожному трофічному рівні втрачається ~90% енергії (правило 10%).
   Тому популяція стабілізується у пропорції приблизно 100:10:1 (Флора:Травоїдні:Хижаки).
 - **Голодова смерть:** істоми, енергія яких вичерпана до 0, видаляються — природний механізм регулювання.
 - **Вищий трофічний рівень = вищий поріг розмноження та вища метаболізм-вартість.**
+- **Візуальна ієрархія:** хижаки (верхній трофічний рівень) малюються поверх травоїдних, травоїдні поверх флори — поєднується з енергетичною пірамідою.
 
 ## Key Files Modified
 | File | Change |
 |------|--------|
-| `src/main.cpp` | Full ecosystem loop rewrite + balancing: population limits, counting, capped photosynthesis, capped reproduction, type-specific eating energy & thresholds |
+| `src/main.cpp` | Full ecosystem loop + balancing + layered draw order + increased initial speeds + biological comments |
 | `src/entities/Entity.h` | Added `OrganismType` enum, `getType()`, `setEnergy()`, `type_` member |
-| `src/entities/Entity.cpp` | Type-based constructor, type-aware metabolism (base 0.015f, predator 0.025f), energy color feedback |
+| `src/entities/Entity.cpp` | Type-based constructor (radius/color/outline per type), type-aware metabolism (base 0.015f, predator 0.025f), energy-based alpha feedback preserving base colour |
 | `src/spatial/SpatialGrid.h` | Added `cellSize` ctor param, `clear()`, `getNearbyEntitiesOfType()` |
 | `src/spatial/SpatialGrid.cpp` | Implementations for new ctor, `clear()`, `getNearbyEntitiesOfType()` |
 
