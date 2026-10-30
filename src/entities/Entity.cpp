@@ -36,6 +36,9 @@ Entity::Entity(sf::Vector2f position, sf::Vector2f velocity, OrganismType type)
 }
 
 void Entity::update(float dt, const sf::Vector2u& windowSize) {
+    // --- ІНТЕГРАЦІЯ ПОЗИЦІЇ (критично для руху) ---
+    position_ += velocity_ * dt;
+
     // Metabolism: energy decreases based on maxSpeed
     // Хижаки витрачають більше енергії на метаболізм (вищий обмін речовин)
     float metabolism_multiplier = (type_ == Entity::OrganismType::Predator) ? 0.025f : 0.015f;

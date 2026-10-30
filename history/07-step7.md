@@ -33,6 +33,7 @@
 - **Draw order layered:** Flora drawn first → Herbivores → Predators last (predators always visible on top)
 - **Energy feedback:** alpha modulated by energy, base type colour preserved (no longer overridden by energy-based color shifts)
 - **Black background** for maximum contrast
+- **CRITICAL FIX:** `position_ += velocity_ * dt` added to `Entity::update()` — entities now actually move (was missing, causing all organisms to stand still)
 
 ## Біологічний сенс (для пояснення викладачу)
 - **Енергетична піраміда:** на кожному трофічному рівні втрачається ~90% енергії (правило 10%).
