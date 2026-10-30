@@ -9,10 +9,10 @@ Entity::Entity(sf::Vector2f position, sf::Vector2f velocity, OrganismType type)
     switch (type) {
         case OrganismType::Flora:
             // Флора: маленькі напівпрозорі зелені кружечки (фоновий шар)
-            // Радіус 7, прозорість 180 — краще видно на екрані.
+            // Радіус 9, прозорість 210 — добре видно на екрані.
             // Флора нерухома, не має поля зору.
-            shape_.setRadius(7.f);
-            shape_.setFillColor(sf::Color(0, 255, 0, 180));
+            shape_.setRadius(9.f);
+            shape_.setFillColor(sf::Color(0, 255, 0, 210));
             shape_.setOutlineThickness(0.f);
             genome_.maxSpeed = 0.f;
             genome_.visionRange = 0.f;
@@ -178,8 +178,17 @@ void Entity::update(float dt, const sf::Vector2u& windowSize) {
 
     // --- КРОК 5: Візуальний фідбек ---
     // Прозорість залежить від енергії, базовий колір типу зберігається
-    float alpha = energy_ / 250.f;
-    if (alpha < 0.1f) alpha = 0.1f; // Ніколи не стає цілком невидимою
+    // Кожен тип має власний дільник для alpha (макс. енергія цього типу)
+    float alpha_divisor;
+    if (type_ == OrganismType::Flora) {
+        alpha_divisor = 100.f;   // Флора макс. енергія = 100
+    } else if (type_ == OrganismType::Herbivore) {
+        alpha_divisor = 250.f;   // Травоїдний макс. енергія = 250
+    } else {
+        alpha_divisor = 300.f;   // Хижак макс. енергія = 300
+    }
+    float alpha = energy_ / alpha_divisor;
+    if (alpha < 0.3f) alpha = 0.3f; // Флора ніколи не стає занадто прозорою
     sf::Color baseColor = shape_.getFillColor();
     shape_.setFillColor(sf::Color(baseColor.r, baseColor.g, baseColor.b,
         static_cast<unsigned char>(baseColor.a * alpha)));

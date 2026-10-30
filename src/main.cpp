@@ -43,9 +43,12 @@ const float PREDATOR_REPRO_THRESHOLD_BASE = 400.f; // Вищий поріг дл
 const int INITIAL_FLORA = 100;
 const int INITIAL_HERBIVORE = 40;                  // Збільшено з 20 до 40
 const int INITIAL_PREDATOR = 8;                    // Зменшено з 15 до 8
-const float INITIAL_FLORA_ENERGY = 100.f;
+const float INITIAL_FLORA_ENERGY = 200.f;          // Збільшено з 100 -> 200 (буфер для поїдання)
 const float INITIAL_HERBIVORE_ENERGY = 250.f;      // Збільшено з 150 до 250 (фора на старті)
 const float INITIAL_PREDATOR_ENERGY = 300.f;       // Збільшено з 200 до 300
+
+// === ШКОДА ВІД ПОЇДАННЯ ===
+const float FLORA_EAT_DAMAGE = 50.f;               // Зменшено з 100 -> 50 (флора переживає укус)
 
 // Допоміжна функція для розрахунку відстані
 float getDistance(const sf::Vector2f& a, const sf::Vector2f& b) {
@@ -281,7 +284,7 @@ int main() {
                         float collisionDist = entity->getGenome().size + target->getGenome().size;
                         if (dist < collisionDist) {
                             entity->addEnergy(HERBIVORE_EAT_ENERGY);   // +120 енергії
-                            target->addEnergy(-100.f);                  // Флора вмирає
+                            target->addEnergy(-FLORA_EAT_DAMAGE);      // -50, флора переживає
                         }
                     }
                 }

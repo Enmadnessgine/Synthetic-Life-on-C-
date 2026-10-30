@@ -1,4 +1,4 @@
-# Step 7: Final Ecosystem Simulation (FSM v5 - Fixed Herbivore Extinction)
+# Step 7: Final Ecosystem Simulation (FSM v6 - Flora Visibility Fixed)
 
 ## Changes Committed
 - Rewrote `src/main.cpp` into a complete ecosystem simulation (Step 7 / Final Ecosystem)
@@ -26,7 +26,7 @@
 - **Metabolism (Entity.cpp):** base `0.015f`, predators `0.025f` (хижаки витрачають більше енергії на обмін речовин)
 
 ## Visual Hierarchy (Step 7.3)
-- **Flora:** radius 5, semi-transparent green (alpha 150) — фоновий шар
+- **Flora:** radius 9, semi-transparent green (alpha 210) — фоновий шар
 - **Herbivore:** radius 12, bright gold (255,215,0,220) with orange outline — середній шар
 - **Predator:** radius 18, opaque bright red (255,0,0,255) with yellow outline — верхній шар
 - **Initial speeds increased:** Herbivore ±150 (was ±100), Predator ±200 (was ±100)
@@ -82,6 +82,22 @@
 - **Predator vision reduced:** 250→150px (realistic, not full-screen)
 - **Herbivore predator detection reduced:** 180→120px (less panic)
 
+## Flora Visibility Fixes (Step 7.6)
+
+### Root Causes Identified
+1. **Alpha divisor wrong for flora** — used 250 (herbivore max energy) instead of 100 (flora max energy), making flora alpha 0.4 at full energy
+2. **Flora died in one bite** — eating damage 100 vs flora starting energy 100 = instant death
+3. **Flora too small and faint** — radius 7, alpha 180, hard to see against black background
+4. **Low minimum alpha floor (0.1)** — flora became nearly invisible at low energy
+
+### Fixes Applied
+- **Type-specific alpha divisors:** Flora 100, Herbivore 250, Predator 300 — correct relative brightness
+- **Minimum alpha floor raised:** 0.1 → 0.3 for flora (always visible)
+- **Flora starting energy:** 100 → 200 (survives one bite)
+- **Eating damage reduced:** 100 → 50 (flora survives one bite, herbivore still gains 120)
+- **Flora visuals enhanced:** radius 7→9, base alpha 180→210
+- **Type-specific alpha divisors in Entity::update():** Flora/100, Herbivore/250, Predator/300
+
 ## Біологічний сенс (для пояснення викладачу)
 - **Енергетична піраміда:** на кожному трофічному рівні втрачається ~90% енергії (правило 10%).
   Тому популяція стабілізується у пропорції приблизно 100:10:1 (Флора:Травоїдні:Хижаки).
@@ -94,9 +110,9 @@
 ## Key Files Modified
 | File | Change |
 |------|--------|
-| `src/main.cpp` | Full FSM interaction loop, limited vision, re-balancing, lerp smoothing, layered draw, fixed thresholds |
+| `src/main.cpp` | Full FSM interaction loop, limited vision, re-balancing, lerp smoothing, layered draw, fixed thresholds, flora energy/damage constants |
 | `src/entities/Entity.h` | FSM enums, state fields, `fleeTimer`, getters/setters with logging |
-| `src/entities/Entity.cpp` | FSM state transitions in `update()`, flee timer auto-exit, type-specific metabolism, wander behavior, visual feedback, flora visibility |
+| `src/entities/Entity.cpp` | FSM state transitions, flee timer auto-exit, type-specific metabolism, type-specific alpha divisors, wander behavior, visual feedback, flora visibility |
 | `src/spatial/SpatialGrid.h` | Added `cellSize` ctor param, `clear()`, `getNearbyEntitiesOfType()` |
 | `src/spatial/SpatialGrid.cpp` | Implementations for new ctor, `clear()`, `getNearbyEntitiesOfType()` |
 
