@@ -20,7 +20,9 @@ struct Genome {
 
 class Entity {
 public:
-    Entity(sf::Vector2f position, sf::Vector2f velocity);
+    enum class OrganismType { Flora, Herbivore, Predator };
+
+    Entity(sf::Vector2f position, sf::Vector2f velocity, OrganismType type);
 
     void update(float dt, const sf::Vector2u& windowSize);
     void draw(sf::RenderTarget& target) const;
@@ -31,10 +33,12 @@ public:
     float getRadius() const { return shape_.getRadius(); }
     sf::Color getColor() const { return shape_.getFillColor(); }
     const Genome& getGenome() const { return genome_; }
+    OrganismType getType() const { return type_; }
 
     // Energy metabolism
     float getEnergy() const { return energy_; }
     void addEnergy(float amount) { energy_ += amount; }
+    void setEnergy(float amount) { energy_ = amount; }
     bool isDead() const { return energy_ <= 0.f; }
 
     // Setters
@@ -49,5 +53,6 @@ private:
     sf::Vector2f velocity_;
     sf::CircleShape shape_;
     Genome genome_;
-    float energy_ = 100.f;  // Starting energy
+    float energy_ = 100.f;
+    OrganismType type_;  // Starting energy
 };

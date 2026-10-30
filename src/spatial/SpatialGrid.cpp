@@ -1,7 +1,7 @@
 #include "SpatialGrid.h"
 
-SpatialGrid::SpatialGrid(float worldWidth, float worldHeight)
-    : cellSize_(CELL_SIZE)
+SpatialGrid::SpatialGrid(float worldWidth, float worldHeight, float cellSize)
+    : cellSize_(cellSize)
 {
     // Calculate grid dimensions (ceil to get full coverage)
     gridWidth_ = static_cast<int>(std::ceil(worldWidth / cellSize_));
@@ -86,4 +86,30 @@ std::vector<int> SpatialGrid::getNearbyEntities(const sf::Vector2f& position) co
     }
 
     return neighbors;
+}
+
+// Clear the grid
+void SpatialGrid::clear() {
+    for (auto& cell : grid_) {
+        cell.clear();
+    }
+}
+
+// Get nearby entities filtered by type
+std::vector<int> SpatialGrid::getNearbyEntitiesOfType(const sf::Vector2f& position, float radius, Entity::OrganismType targetType, const std::vector<std::unique_ptr<Entity>>& entities) const {
+    std::vector<int> nearby;
+
+    // Get all entities in nearby cells
+    std::vector<int> allNearby = getNearbyEntities(position);
+
+    // Filter by type
+    for (int idx : allNearby) {
+        if (idx >= 0 && static_cast<size_t>(idx) < entities.size()) {
+            if (entities[idx]->getType() == targetType) {
+                nearby.push_back(idx);
+            }
+        }
+    }
+
+    return nearby;
 }

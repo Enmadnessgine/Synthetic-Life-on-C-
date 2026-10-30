@@ -1,278 +1,242 @@
-#include <SFML/Graphics.hpp>
+#include <iostream>
 #include <vector>
 #include <memory>
-#include <cmath>
 #include <algorithm>
+#include <cmath>
+#include <cstdlib>
+#include <ctime>
+#include <SFML/Graphics.hpp>
 
-// Genome struct controls inheritable genetic traits
-struct Genome {
-    float maxSpeed = 200.f;
-    float size = 20.f;
-    sf::Color color = sf::Color::Green;
-    float visionRange = 150.f;
-    float mutationRate = 0.1f;
+#include "entities/Entity.h"
+#include "spatial/SpatialGrid.h"
 
-    Genome() = default;
-    Genome(float maxSpeed, float size, sf::Color color, float visionRange, float mutationRate)
-        : maxSpeed(maxSpeed), size(size), color(color), visionRange(visionRange), mutationRate(mutationRate) {}
-};
-
-class Entity {
-public:
-    Entity(sf::Vector2f position, sf::Vector2f velocity);
-
-    void update(float dt, const sf::Vector2u& windowSize);
-    void draw(sf::RenderTarget& target) const;
-
-    sf::Vector2f getPosition() const { return position_; }
-    sf::Vector2f getVelocity() const { return velocity_; }
-    float getRadius() const { return shape_.getRadius(); }
-    sf::Color getColor() const { return shape_.getFillColor(); }
-    const Genome& getGenome() const { return genome_; }
-
-    // Energy metabolism
-    float getEnergy() const { return energy_; }
-    void addEnergy(float amount) { energy_ += amount; }
-    bool isDead() const { return energy_ <= 0.f; }
-
-    void setVelocity(sf::Vector2f velocity) { velocity_ = velocity; }
-    void setPosition(sf::Vector2f position) { position_ = position; shape_.setPosition(position); }
-    void setRadius(float radius) { shape_.setRadius(radius); }
-    void setColor(sf::Color color) { shape_.setFillColor(color); }
-    void setGenome(const Genome& genome) { genome_ = genome; }
-
-private:
-    sf::Vector2f position_;
-    sf::Vector2f velocity_;
-    sf::CircleShape shape_;
-    Genome genome_;
-    float energy_ = 100.f;
-};
+// Допоміжна функція для розрахунку відстані
+float getDistance(const sf::Vector2f& a, const sf::Vector2f& b) {
+    float dx = a.x - b.x;
+    float dy = a.y - b.y;
+    return std::sqrt(dx * dx + dy * dy);
+}
 
 int main() {
-    sf::RenderWindow window(sf::VideoMode({1024, 768}), "Artificial Life - Step 6");
+    std::srand(static_cast<unsigned int>(std::time(nullptr))); // Ініціалізація генератора випадкових чисел
+
+    // 1. Налаштування вікна
+    sf::RenderWindow window(sf::VideoMode({1024, 768}), "Artificial Life - Final Ecosystem");
     window.setFramerateLimit(60);
-
-    // Create initial entities with genomes and energy
-    std::vector<std::unique_ptr<Entity>> entities;
-    entities.push_back(std::make_unique<Entity>(sf::Vector2f(100.f, 100.f), sf::Vector2f(150.f, 100.f)));
-    entities.push_back(std::make_unique<Entity>(sf::Vector2f(500.f, 300.f), sf::Vector2f(-100.f, 50.f)));
-    entities.push_back(std::make_unique<Entity>(sf::Vector2f(300.f, 600.f), sf::Vector2f(200.f, -75.f)));
-    entities.push_back(std::make_unique<Entity>(sf::Vector2f(800.f, 200.f), sf::Vector2f(-150.f, -100.f)));
-
-    // Reproduction strategies
-    // Note: reproduction is now energy-based, not just timer-based
-
     sf::Clock clock;
 
+    // 2. Ініціалізація SpatialGrid (світ 1024x768, комірка 100px)
+    SpatialGrid grid(1024.f, 768.f, 100.f);
+
+    // 3. Створення початкової популяції
+    std::vector<std::unique_ptr<Entity>> entities;
+    
+    std::cout << "=== Ініціалізація екосистеми ===" << std::endl;
+
+    // Флора (150 шт.)
+    for (int i = 0; i < 150; ++i) {
+        float x = static_cast<float>(std::rand() % 1024);
+        float y = static_cast<float>(std::rand() % 768);
+        auto flora = std::make_unique<Entity>(sf::Vector2f(x, y), sf::Vector2f(0.f, 0.f), Entity::OrganismType::Flora);
+        flora->addEnergy(100.f);
+        entities.push_back(std::move(flora));
+    }
+
+    // Травоїдні (30 шт.)
+    for (int i = 0; i < 30; ++i) {
+        float x = static_cast<float>(std::rand() % 1024);
+        float y = static_cast<float>(std::rand() % 768);
+        float vx = static_cast<float>((std::rand() % 200) - 100);
+        float vy = static_cast<float>((std::rand() % 200) - 100);
+        auto herb = std::make_unique<Entity>(sf::Vector2f(x, y), sf::Vector2f(vx, vy), Entity::OrganismType::Herbivore);
+        herb->addEnergy(150.f);
+        entities.push_back(std::move(herb));
+    }
+
+    // Хижаки (10 шт.)
+    for (int i = 0; i < 10; ++i) {
+        float x = static_cast<float>(std::rand() % 1024);
+        float y = static_cast<float>(std::rand() % 768);
+        float vx = static_cast<float>((std::rand() % 200) - 100);
+        float vy = static_cast<float>((std::rand() % 200) - 100);
+        auto pred = std::make_unique<Entity>(sf::Vector2f(x, y), sf::Vector2f(vx, vy), Entity::OrganismType::Predator);
+        pred->addEnergy(200.f);
+        entities.push_back(std::move(pred));
+    }
+    std::cout << "Створено істот. Загальна кількість: " << entities.size() << "\n" << std::endl;
+
+    // Таймери для розмноження
+    float asexualTimer = 0.f;
+
+    // 4. Головний цикл симуляції
     while (window.isOpen()) {
-        // Event handling
-        if (const std::optional event = window.pollEvent(); event.has_value() && event->is<sf::Event::Closed>()) {
-            window.close();
+        float dt = clock.restart().asSeconds();
+        if (dt > 0.1f) dt = 0.1f; // Запобігання стрибкам при лагах
+
+        // --- Обробка подій (SFML 3.0 API) ---
+        while (auto event = window.pollEvent()) {
+            if (event->is<sf::Event::Closed>()) {
+                window.close();
+            }
         }
 
-        float dt = clock.restart().asSeconds();
-
-        // 1. Update all entities (metabolism, movement, wall bounce)
+        // --- КРОК А: Оновлення фізики та метаболізму ---
         for (auto& entity : entities) {
             entity->update(dt, window.getSize());
         }
 
-        // 2. Reproduction logic (energy-based, not just timer-based)
-        // Check each entity if it can reproduce
-        static float asexualTimer = 0.f;
-        static float sexualTimer = 0.f;
-        const float reproduceInterval = 5.f; // base interval check frequency
+        // --- КРОК Б: Оновлення SpatialGrid ---
+        grid.clear();
+        for (size_t i = 0; i < entities.size(); ++i) {
+            grid.addEntity(entities[i]->getPosition(), i);
+        }
 
+        // --- КРОК В: Харчовий ланцюг (Взаємодії) ---
+        for (size_t i = 0; i < entities.size(); ++i) {
+            auto& entity = entities[i];
+            if (entity->isDead()) continue;
+
+            Entity::OrganismType type = entity->getType();
+
+            if (type == Entity::OrganismType::Flora) {
+                // Фотосинтез
+                entity->addEnergy(25.f * dt); 
+            } 
+            else if (type == Entity::OrganismType::Herbivore) {
+                auto targets = grid.getNearbyEntitiesOfType(entity->getPosition(), entity->getGenome().visionRange, Entity::OrganismType::Flora, entities);
+                if (!targets.empty()) {
+                    int closestIdx = targets[0];
+                    float minDist = getDistance(entity->getPosition(), entities[closestIdx]->getPosition());
+                    
+                    for (int idx : targets) {
+                        float dist = getDistance(entity->getPosition(), entities[idx]->getPosition());
+                        if (dist < minDist) {
+                            minDist = dist;
+                            closestIdx = idx;
+                        }
+                    }
+
+                    auto& target = entities[closestIdx];
+                    if (!target->isDead()) {
+                        // Рух до цілі (Seek)
+                        sf::Vector2f dir = target->getPosition() - entity->getPosition();
+                        float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+                        if (len > 0.f) {
+                            entity->setVelocity((dir / len) * entity->getGenome().maxSpeed);
+                        }
+
+                        // Поїдання
+                        float collisionDist = entity->getGenome().size + target->getGenome().size;
+                        if (minDist < collisionDist) {
+                            entity->addEnergy(60.f);       
+                            target->addEnergy(-100.f);     
+                        }
+                    }
+                }
+            } 
+            else if (type == Entity::OrganismType::Predator) {
+                auto targets = grid.getNearbyEntitiesOfType(entity->getPosition(), entity->getGenome().visionRange, Entity::OrganismType::Herbivore, entities);
+                if (!targets.empty()) {
+                    int closestIdx = targets[0];
+                    float minDist = getDistance(entity->getPosition(), entities[closestIdx]->getPosition());
+                    
+                    for (int idx : targets) {
+                        float dist = getDistance(entity->getPosition(), entities[idx]->getPosition());
+                        if (dist < minDist) {
+                            minDist = dist;
+                            closestIdx = idx;
+                        }
+                    }
+
+                    auto& target = entities[closestIdx];
+                    if (!target->isDead()) {
+                        sf::Vector2f dir = target->getPosition() - entity->getPosition();
+                        float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+                        if (len > 0.f) {
+                            entity->setVelocity((dir / len) * entity->getGenome().maxSpeed);
+                        }
+
+                        float collisionDist = entity->getGenome().size + target->getGenome().size;
+                        if (minDist < collisionDist) {
+                            entity->addEnergy(100.f);      
+                            target->addEnergy(-100.f);     
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- КРОК Г: Розмноження ---
         asexualTimer += dt;
-        sexualTimer += dt;
+        
+        std::vector<std::unique_ptr<Entity>> newborns;
+        
+        if (asexualTimer >= 4.0f) {
+            for (auto& entity : entities) {
+                if (entity->isDead()) continue;
+                
+                float threshold = std::max(120.f, entity->getGenome().maxSpeed * 1.2f);
+                if (entity->getEnergy() >= threshold) {
+                    float energyToPass = entity->getEnergy() * 0.4f;
+                    entity->addEnergy(-energyToPass);
 
-        // Asexual reproduction: check each entity
-        if (asexualTimer >= reproduceInterval) {
-            // Iterate over a copy of indices to safely handle removals
-            for (int i = (int)entities.size() - 1; i >= 0; --i) {
-                Entity& entity = *entities[i];
-                // Can reproduce if energy >= maxSpeed * 2.0f
-                if (entity.getEnergy() >= entity.getGenome().maxSpeed * 2.0f) {
-                    // Clone parent with mutation
-                    Genome childGenome = entity.getGenome();
-
-                    // Mutate genome traits
-                    if ((rand() / (double)RAND_MAX) < childGenome.mutationRate) {
-                        // Mutate maxSpeed-related velocity
-                        float speedMutate = (static_cast<float>(rand()) / RAND_MAX - 0.5f) * 40.f;
-                        childGenome.maxSpeed += speedMutate;
-                        if (childGenome.maxSpeed < 50.f) childGenome.maxSpeed = 50.f;
-                        if (childGenome.maxSpeed > 500.f) childGenome.maxSpeed = 500.f;
-
-                        // Mutate size
-                        float sizeMutate = (static_cast<float>(rand()) / RAND_MAX - 0.5f) * 10.f;
-                        childGenome.size += sizeMutate;
-                        if (childGenome.size < 5.f) childGenome.size = 5.f;
-                        if (childGenome.size > 50.f) childGenome.size = 50.f;
-
-                        // Mutate color (change one channel)
-                        if ((rand() / (double)RAND_MAX) < childGenome.mutationRate) {
-                            int channel = rand() % 3;
-                            int change = rand() % 50 - 25;
-                            sf::Color c = childGenome.color;
-                            if (channel == 0) c.r = std::max(0, std::min(255, c.r + change));
-                            else if (channel == 1) c.g = std::max(0, std::min(255, c.g + change));
-                            else c.b = std::max(0, std::min(255, c.b + change));
-                            childGenome.color = c;
-                        }
-
-                        // Mutate visionRange
-                        if ((rand() / (double)RAND_MAX) < childGenome.mutationRate) {
-                            float visionMutate = (static_cast<float>(rand()) / RAND_MAX - 0.5f) * 60.f;
-                            childGenome.visionRange += visionMutate;
-                            if (childGenome.visionRange < 30.f) childGenome.visionRange = 30.f;
-                            if (childGenome.visionRange > 300.f) childGenome.visionRange = 300.f;
-                        }
-
-                        // Apply mutated genome to child entity
-                        Entity child(entity.getPosition(), entity.getVelocity());
-                        child.setGenome(childGenome);
-                        float speedFactor = childGenome.maxSpeed / 200.f;
-                        child.setVelocity(sf::Vector2f(
-                            entity.getVelocity().x * speedFactor,
-                            entity.getVelocity().y * speedFactor
-                        ));
-                        child.setRadius(childGenome.size);
-                        child.setColor(childGenome.color);
-
-                        // Parent loses 50% of current energy
-                        entity.addEnergy(-entity.getEnergy() * 0.5f);
-
-                        // Child created with the energy that was subtracted
-                        // (child's energy starts at 100.f, but its properties reflect the parent's state)
-
-                        entities.push_back(std::make_unique<Entity>(std::move(child)));
-                    }
-                    asexualTimer = 0.f;
-                    // Only one asexual reproduction per entity per interval
-                    break; 
-                }
-            }
-        }
-
-        // Sexual reproduction: check pairs of entities
-        if (sexualTimer >= reproduceInterval) {
-            if (entities.size() >= 2) {
-                // Find two random distinct entities that have enough energy
-                int parent1Idx = rand() % entities.size();
-                int parent2Idx = rand() % entities.size();
-                while (parent2Idx == parent1Idx) {
-                    parent2Idx = rand() % entities.size();
-                }
-
-                Entity& parent1 = *entities[parent1Idx];
-                Entity& parent2 = *entities[parent2Idx];
-
-                // Both parents need enough energy to reproduce
-                if (parent1.getEnergy() >= parent1.getGenome().maxSpeed * 2.0f &&
-                    parent2.getEnergy() >= parent2.getGenome().maxSpeed * 2.0f) {
-
-                    // Create offspring with blended genome
-                    Genome childGenome;
-
-                    // Blend traits from both parents
-                    childGenome.maxSpeed = (parent1.getGenome().maxSpeed + parent2.getGenome().maxSpeed) / 2.f;
-                    childGenome.size = (parent1.getGenome().size + parent2.getGenome().size) / 2.f;
-                    sf::Color c1 = parent1.getGenome().color;
-                    sf::Color c2 = parent2.getGenome().color;
-                    sf::Color avgColor = sf::Color(
-                        (c1.r + c2.r) / 2,
-                        (c1.g + c2.g) / 2,
-                        (c1.b + c2.b) / 2
+                    Genome childGenome = entity->getGenome();
+                    childGenome.maxSpeed += static_cast<float>((std::rand() % 21) - 10); // ±10 мутація
+                    childGenome.size += static_cast<float>((std::rand() % 5) - 2);       // ±2 мутація
+                    
+                    sf::Vector2f childPos = entity->getPosition() + sf::Vector2f(
+                        static_cast<float>(std::rand() % 40 - 20), 
+                        static_cast<float>(std::rand() % 40 - 20)
                     );
-                    childGenome.color = avgColor;
-                    childGenome.visionRange = (parent1.getGenome().visionRange + parent2.getGenome().visionRange) / 2.f;
-                    childGenome.mutationRate = (parent1.getGenome().mutationRate + parent2.getGenome().mutationRate) / 2.f;
-
-                    // Apply mutation
-                    if ((rand() / (double)RAND_MAX) < childGenome.mutationRate) {
-                        if ((rand() / (double)RAND_MAX) < childGenome.mutationRate) {
-                            float speedMutate = (static_cast<float>(rand()) / RAND_MAX - 0.5f) * 40.f;
-                            childGenome.maxSpeed += speedMutate;
-                            if (childGenome.maxSpeed < 50.f) childGenome.maxSpeed = 50.f;
-                            if (childGenome.maxSpeed > 500.f) childGenome.maxSpeed = 500.f;
-                        }
-                        if ((rand() / (double)RAND_MAX) < childGenome.mutationRate) {
-                            float sizeMutate = (static_cast<float>(rand()) / RAND_MAX - 0.5f) * 10.f;
-                            childGenome.size += sizeMutate;
-                            if (childGenome.size < 5.f) childGenome.size = 5.f;
-                            if (childGenome.size > 50.f) childGenome.size = 50.f;
-                        }
-                        if ((rand() / (double)RAND_MAX) < childGenome.mutationRate) {
-                            int channel = rand() % 3;
-                            int change = rand() % 50 - 25;
-                            sf::Color c = childGenome.color;
-                            if (channel == 0) c.r = std::max(0, std::min(255, c.r + change));
-                            else if (channel == 1) c.g = std::max(0, std::min(255, c.g + change));
-                            else c.b = std::max(0, std::min(255, c.b + change));
-                            childGenome.color = c;
-                        }
-                        if ((rand() / (double)RAND_MAX) < childGenome.mutationRate) {
-                            float visionMutate = (static_cast<float>(rand()) / RAND_MAX - 0.5f) * 60.f;
-                            childGenome.visionRange += visionMutate;
-                            if (childGenome.visionRange < 30.f) childGenome.visionRange = 30.f;
-                            if (childGenome.visionRange > 300.f) childGenome.visionRange = 300.f;
-                        }
-                        if ((rand() / (double)RAND_MAX) < childGenome.mutationRate) {
-                            float rateMutate = (static_cast<float>(rand()) / RAND_MAX - 0.5f) * 0.2f;
-                            childGenome.mutationRate += rateMutate;
-                            if (childGenome.mutationRate < 0.0f) childGenome.mutationRate = 0.0f;
-                            if (childGenome.mutationRate > 1.0f) childGenome.mutationRate = 1.0f;
-                        }
+                    
+                    sf::Vector2f childVel(0.f, 0.f);
+                    if (entity->getType() != Entity::OrganismType::Flora) {
+                        childVel = sf::Vector2f(
+                            static_cast<float>(std::rand() % 200 - 100), 
+                            static_cast<float>(std::rand() % 200 - 100)
+                        );
                     }
 
-                    // Apply blended genome to child entity
-                    Entity child((parent1.getPosition() + parent2.getPosition()) / 2.f,
-                                  (parent1.getVelocity() + parent2.getVelocity()) / 2.f);
-                    child.setGenome(childGenome);
-                    float speedFactor = childGenome.maxSpeed / 200.f;
-                    child.setVelocity(sf::Vector2f(
-                        (parent1.getVelocity().x + parent2.getVelocity().x) / 2.f * speedFactor,
-                        (parent1.getVelocity().y + parent2.getVelocity().y) / 2.f * speedFactor
-                    ));
-                    child.setRadius(childGenome.size);
-                    child.setColor(childGenome.color);
-
-                    // Both parents lose 50% of current energy
-                    parent1.addEnergy(-parent1.getEnergy() * 0.5f);
-                    parent2.addEnergy(-parent2.getEnergy() * 0.5f);
-
-                    entities.push_back(std::make_unique<Entity>(std::move(child)));
-                    sexualTimer = 0.f;
+                    auto child = std::make_unique<Entity>(childPos, childVel, entity->getType());
+                    child->setGenome(childGenome);
+                    child->addEnergy(energyToPass);
+                    newborns.push_back(std::move(child));
                 }
             }
+            asexualTimer = 0.f; // Таймер скидається завжди, щоб уникнути спаму
         }
 
-// 3. "Mark and Sweep" pattern: safely remove dead entities
-        // NEVER erase during iteration! Use erase-remove idiom (C++17)
+        for (auto& child : newborns) {
+            entities.push_back(std::move(child));
+        }
+
+        // --- КРОК Д: Очищення мертвих істот (Mark and Sweep) ---
         entities.erase(
             std::remove_if(entities.begin(), entities.end(), 
-                [](const std::unique_ptr<Entity>& e) {
-                    return e->isDead();
-                }),
+                [](const std::unique_ptr<Entity>& e) { return e->isDead(); }),
             entities.end()
         );
 
-        // 4. Event handling
-        if (const std::optional event = window.pollEvent(); event.has_value() && event->is<sf::Event::Closed>()) {
-            window.close();
-        }
-
-        // 5. Update entities again after cleanup (for consistent state)
-        // Actually, entities were already updated above, so skip re-update
-
-        // 6. Draw
+        // --- КРОК Е: Рендеринг ---
         window.clear(sf::Color::Black);
         for (const auto& entity : entities) {
             entity->draw(window);
         }
         window.display();
+
+        // Відладочний вивід статистики кожну секунду
+        static int frameCount = 0;
+        if (++frameCount % 60 == 0) {
+            int flora = 0, herb = 0, pred = 0;
+            for (const auto& e : entities) {
+                if (e->getType() == Entity::OrganismType::Flora) flora++;
+                else if (e->getType() == Entity::OrganismType::Herbivore) herb++;
+                else if (e->getType() == Entity::OrganismType::Predator) pred++;
+            }
+            std::cout << "Статистика -> Flora: " << flora 
+                      << " | Herbivore: " << herb 
+                      << " | Predator: " << pred << std::endl;
+        }
     }
 
     return 0;
