@@ -10,6 +10,11 @@
 #include "entities/Entity.h"
 #include "spatial/SpatialGrid.h"
 
+// Ліміти популяції для стабілізації екосистеми
+const int MAX_FLORA = 500;
+const int MAX_HERBIVORE = 100;
+const int MAX_PREDATOR = 30;
+
 // Допоміжна функція для розрахунку відстані
 float getDistance(const sf::Vector2f& a, const sf::Vector2f& b) {
     float dx = a.x - b.x;
@@ -33,8 +38,8 @@ int main() {
     
     std::cout << "=== Ініціалізація екосистеми ===" << std::endl;
 
-    // Флора (150 шт.)
-    for (int i = 0; i < 150; ++i) {
+    // Флора (100 шт.)
+    for (int i = 0; i < 100; ++i) {
         float x = static_cast<float>(std::rand() % 1024);
         float y = static_cast<float>(std::rand() % 768);
         auto flora = std::make_unique<Entity>(sf::Vector2f(x, y), sf::Vector2f(0.f, 0.f), Entity::OrganismType::Flora);
@@ -42,8 +47,8 @@ int main() {
         entities.push_back(std::move(flora));
     }
 
-    // Травоїдні (30 шт.)
-    for (int i = 0; i < 30; ++i) {
+    // Травоїдні (20 шт.)
+    for (int i = 0; i < 20; ++i) {
         float x = static_cast<float>(std::rand() % 1024);
         float y = static_cast<float>(std::rand() % 768);
         float vx = static_cast<float>((std::rand() % 200) - 100);
@@ -53,8 +58,8 @@ int main() {
         entities.push_back(std::move(herb));
     }
 
-    // Хижаки (10 шт.)
-    for (int i = 0; i < 10; ++i) {
+    // Хижаки (8 шт.)
+    for (int i = 0; i < 8; ++i) {
         float x = static_cast<float>(std::rand() % 1024);
         float y = static_cast<float>(std::rand() % 768);
         float vx = static_cast<float>((std::rand() % 200) - 100);
@@ -91,6 +96,14 @@ int main() {
             grid.addEntity(entities[i]->getPosition(), i);
         }
 
+        // Підрахунок поточної популяції для лімітів
+        int floraCount = 0, herbCount = 0, predCount = 0;
+        for (const auto& e : entities) {
+            if (e->getType() == Entity::OrganismType::Flora) floraCount++;
+            else if (e->getType() == Entity::OrganismType::Herbivore) herbCount++;
+            else if (e->getType() == Entity::OrganismType::Predator) predCount++;
+        }
+
         // --- КРОК В: Харчовий ланцюг (Взаємодії) ---
         for (size_t i = 0; i < entities.size(); ++i) {
             auto& entity = entities[i];
@@ -99,8 +112,10 @@ int main() {
             Entity::OrganismType type = entity->getType();
 
             if (type == Entity::OrganismType::Flora) {
-                // Фотосинтез
-                entity->addEnergy(25.f * dt); 
+                // Фотосинтез (тільки якщо флори не забагато)
+                if (floraCount < MAX_FLORA) {
+                    entity->addEnergy(12.f * dt);
+                }
             } 
             else if (type == Entity::OrganismType::Herbivore) {
                 auto targets = grid.getNearbyEntitiesOfType(entity->getPosition(), entity->getGenome().visionRange, Entity::OrganismType::Flora, entities);
@@ -128,7 +143,7 @@ int main() {
                         // Поїдання
                         float collisionDist = entity->getGenome().size + target->getGenome().size;
                         if (minDist < collisionDist) {
-                            entity->addEnergy(60.f);       
+                            entity->addEnergy(80.f);       
                             target->addEnergy(-100.f);     
                         }
                     }
@@ -158,7 +173,7 @@ int main() {
 
                         float collisionDist = entity->getGenome().size + target->getGenome().size;
                         if (minDist < collisionDist) {
-                            entity->addEnergy(100.f);      
+                            entity->addEnergy(120.f);      
                             target->addEnergy(-100.f);     
                         }
                     }
@@ -172,8 +187,15 @@ int main() {
         std::vector<std::unique_ptr<Entity>> newborns;
         
         if (asexualTimer >= 4.0f) {
+            int newFlora = 0, newHerb = 0, newPred = 0;
             for (auto& entity : entities) {
                 if (entity->isDead()) continue;
+
+                // Обмеж розмноження за лімітами популяції
+                Entity::OrganismType eType = entity->getType();
+                if (eType == Entity::OrganismType::Flora && floraCount + newFlora >= MAX_FLORA) continue;
+                if (eType == Entity::OrganismType::Herbivore && herbCount + newHerb >= MAX_HERBIVORE) continue;
+                if (eType == Entity::OrganismType::Predator && predCount + newPred >= MAX_PREDATOR) continue;
                 
                 float threshold = std::max(120.f, entity->getGenome().maxSpeed * 1.2f);
                 if (entity->getEnergy() >= threshold) {
@@ -201,6 +223,11 @@ int main() {
                     child->setGenome(childGenome);
                     child->addEnergy(energyToPass);
                     newborns.push_back(std::move(child));
+
+                    // Оновлюємо лічильники newborn для точного ліміту
+                    if (eType == Entity::OrganismType::Flora) newFlora++;
+                    else if (eType == Entity::OrganismType::Herbivore) newHerb++;
+                    else if (eType == Entity::OrganismType::Predator) newPred++;
                 }
             }
             asexualTimer = 0.f; // Таймер скидається завжди, щоб уникнути спаму

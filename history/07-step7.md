@@ -1,4 +1,4 @@
-# Step 7: Final Ecosystem Simulation
+# Step 7: Final Ecosystem Simulation (Balanced)
 
 ## Changes Committed
 - Rewrote `src/main.cpp` into a complete ecosystem simulation (Step 7 / Final Ecosystem)
@@ -10,16 +10,23 @@
 - Removed unused sexual reproduction path (strategy classes exist but are not integrated into main loop)
 - Added frame-rate-independent delta-time clamping (`dt` capped at 0.1s)
 - Added per-second console statistics output (Flora / Herbivore / Predator counts)
-- Flora photosynthesis energy gain increased to 25.f * dt with energy-based visual feedback
 - Collision distances now use `genome.size` instead of `getRadius()`
 - Reproduction threshold: `max(120.f, maxSpeed * 1.2f)`; parent passes 40% energy to child
 - Child mutation: `maxSpeed ±10`, `size ±2`, random offset position/velocity
 - Reproduction timer resets every frame (not just on success) to prevent retry spam
 
+## Ecosystem Balancing (Step 7.1)
+- **Population limits:** `MAX_FLORA=500`, `MAX_HERBIVORE=100`, `MAX_PREDATOR=30`
+- **Reduced initial population:** Flora 150→100, Herbivore 30→20, Predator 10→8
+- **Population counting** before interaction loop each frame
+- **Photosynthesis:** rate 25→12 `* dt`, disabled when `floraCount >= MAX_FLORA`
+- **Reproduction limits:** blocked per-type when population reaches cap (tracks newborns within tick to prevent overshoot)
+- **Energy from eating increased:** Herbivore→Flora 60→80, Predator→Herbivore 100→120 (better predator control of herbivores)
+
 ## Key Files Modified
 | File | Change |
 |------|--------|
-| `src/main.cpp` | Full ecosystem loop rewrite (window, grid, physics, interactions, reproduction, render, stats) |
+| `src/main.cpp` | Full ecosystem loop rewrite + balancing constants, population counting, capped photosynthesis, capped reproduction, increased eating energy |
 | `src/entities/Entity.h` | Added `OrganismType` enum, `getType()`, `setEnergy()`, `type_` member (from Step 4-6) |
 | `src/entities/Entity.cpp` | Type-based constructor (radius/color/speed per type), metabolism `0.02f`, energy color feedback (from Step 4-6) |
 | `src/spatial/SpatialGrid.h` | Added `cellSize` ctor param, `clear()`, `getNearbyEntitiesOfType()` (from Step 3-4) |
