@@ -155,9 +155,11 @@ int main() {
 
             if (type == Entity::OrganismType::Flora) {
                 // ФОТОСИНТЕЗ — флора накопичує енергію зі сонця
-                // Обмежуємо фотосинтез при досягненні ліміту популяції флори
+                // При досягненні ліміту популяції — повільний фотосинтез для підтримки енергії
                 if (floraCount < MAX_FLORA) {
-                    entity->addEnergy(18.f * dt);
+                    entity->addEnergy(18.f * dt);  // Нормальний фотосинтез
+                } else {
+                    entity->addEnergy(5.f * dt);   // Повільний фотосинтез навіть при ліміті популяції
                 }
             } 
             else if (type == Entity::OrganismType::Herbivore) {
@@ -355,8 +357,8 @@ int main() {
                             float dist = getDistance(entity->getPosition(), target->getPosition());
                             float collisionDist = entity->getGenome().size + target->getGenome().size;
                             if (dist < collisionDist) {
-                                entity->addEnergy(PREDATOR_EAT_ENERGY);    // +100 енергії
-                                target->addEnergy(-100.f);                 // Травоїдна вмирає
+                                entity->addEnergy(130.f);      // +130 енергії (було +100, NET ZERO виправлено)
+                                target->addEnergy(-100.f);     // Травоїдна вмирає
                             }
                         }
                     }
@@ -386,8 +388,8 @@ int main() {
                     // Травоїдні розмножуються частіше (нижчий поріг)
                     threshold = std::max(HERBIVORE_REPRO_THRESHOLD_BASE, entity->getGenome().maxSpeed * 0.5f);
                 } else if (eType == Entity::OrganismType::Predator) {
-                    // Хижаки розмножуються рідше (вищий поріг)
-                    threshold = std::max(PREDATOR_REPRO_THRESHOLD_BASE, entity->getGenome().maxSpeed * 1.5f);
+                    // Хижаки розмножуються рідше (нижчий поріг, бо отримують більше енергії від полювання)
+                    threshold = std::max(250.f, entity->getGenome().maxSpeed * 1.2f);
                 } else {
                     threshold = std::max(120.f, entity->getGenome().maxSpeed * 1.2f);
                 }

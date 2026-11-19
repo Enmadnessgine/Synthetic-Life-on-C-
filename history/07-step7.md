@@ -107,10 +107,51 @@
 - **FSM поведінка:** істоти приймають рішення на основі внутрішнього стану та оточення — не випадковий рух.
 - **FLEE таймер:** імітує адреналіновий ризик — короткостковий вирив втечі, потім повернення до життєво важливих задач.
 
-## Toroidal World (Step 7.7) — Wrap-around Screen
-- **Toroidal topology:** світ має топологію тора — клітини, що виходять за лівий край, з'являються з правого, і навпаки (теж саме для верху/низу)
-- **Виправлено проблему:** хижаки більше не легко ловлять травоїдних, які "заглючують" у кутах екрану — тепер травоїдні можуть втікати через край екрану
-- **SpatialGrid:** коректно оновлюється кожен кадр після wrap-around, бо grid перебудовується кожен кадр
+## Critical Bug Fixes (Step 7.5) — Fix Herbivore Extinction
+
+### Root Causes Identified
+1. **FLEE state blocked eating** — herbivores in FLEE could not eat, starved while fleeing
+2. **Reproduction thresholds too high** — `std::max(80, 220*1.0) = 220` for herbivores, `max(400, 200*3) = 600` for predators
+3. **Predator vision too wide** — 250px (nearly full screen), herbivores perpetually fleeing
+3. **FLEE never ended** — no timer, herbivores fled indefinitely
+4. **Flora invisible at MAX_FLORA** — radius 5, alpha 150, invisible against black background
+
+### Fixes Applied
+- **Reproduction thresholds fixed:** Herbivore `max(80, 220*0.5) = 110`; Predator `max(400, 200*1.5) = 400`
+- **Vision ranges reduced:** Predator 250→150px; Herbivore predator detection 180→120px
+- **FLEE timer added:** 2.5s auto-exit back to energy-based state (SEEK_FOOD/SEEK_MATE/WANDER)
+- **Eating allowed during FLEE** — herbivores can eat while fleeing
+- **Flora visibility:** radius 5→7, alpha 150→180
+- **Predator vision reduced:** 250→150px (realistic, not full-screen)
+- **Herbivore predator detection reduced:** 180→120px (less panic)
+
+## Flora Visibility Fixes (Step 7.6)
+
+### Root Causes Identified
+1. **Alpha divisor wrong for flora** — used 250 (herbivore max energy) instead of 100 (flora max energy), making flora alpha 0.4 at full energy
+2. **Flora died in one bite** — eating damage 100 vs flora starting energy 100 = instant death
+3. **Flora too small and faint** — radius 7, alpha 180, hard to see against black background
+4. **Low minimum alpha floor (0.1)** — flora became nearly invisible at low energy
+
+### Fixes Applied
+- **Type-specific alpha divisors:** Flora 100, Herbivore 250, Predator 300 — correct relative brightness
+- **Minimum alpha floor raised:** 0.1 → 0.3 for flora (always visible)
+- **Flora starting energy:** 100 → 200 (survives one bite)
+- **Eating damage reduced:** 100 → 50 (flora survives one bite, herbivore still gains 120)
+- **Flora visuals enhanced:** radius 7→9, base alpha 180→210
+- **Type-specific alpha divisors in Entity::update():** Flora/100, Herbivore/250, Predator/300
+
+## Critical Balance Fixes (Step 7.8)
+
+### Root Causes Identified
+1. **Predators NET ZERO energy gain** — Predator→Herbivore: +100 / Herbivore loses 100 = zero net gain, predators starved even when hunting successfully
+2. **Predator reproduction threshold too high** — `max(400, maxSpeed * 1.5)` = 400+ with high metabolism = no reproduction
+3. **Flora photosynthesis stops at MAX_FLORA** — at 1000 flora, photosynthesis completely stops, no energy for reproduction
+
+### Fixes Applied
+- **Predator eating energy:** +100 → +130 (net +30 per kill, sustains metabolism + reproduction)
+- **Predator reproduction threshold:** `max(400, maxSpeed * 1.5)` → `max(250, maxSpeed * 1.2)` (lower threshold, earlier reproduction)
+- **Flora photosynthesis at cap:** added `else` branch with `5.f * dt` slow photosynthesis when `floraCount >= MAX_FLORA` — maintains energy for reproduction
 
 ## Key Files Modified
 | File | Change |
