@@ -131,6 +131,11 @@ void drawButton(sf::RenderWindow& window, const sf::Font& font, const std::strin
     window.draw(btnText);
 }
 
+// Overloaded drawButton without hover/pressed for simple static buttons
+void drawButton(sf::RenderWindow& window, const sf::Font& font, const std::string& text, float x, float y, float w, float h) {
+    drawButton(window, font, text, x, y, w, h, false, false);
+}
+
 bool isMouseInRect(const sf::Vector2f& mousePos, float x, float y, float w, float h) {
     return mousePos.x >= x && mousePos.x <= x + w && mousePos.y >= y && mousePos.y <= y + h;
 }
@@ -560,7 +565,7 @@ int main() {
         }
 
         // --- Rendering ---
-        window.clear(sf::Color::Black);
+        window.clear(sf::Color(20, 20, 20)); // Dark background
 
         // Layered rendering: Flora -> Herbivores -> Predators
         for (const auto& entity : entities) {
@@ -579,33 +584,232 @@ int main() {
             }
         }
 
-        // Draw UI panels
-        sf::Font font = uiState.font;
+        // --- UI Panels (drawn over entities, under menu bar) ---
         if (uiState.fontLoaded) {
-            // Menu bar
-            sf::RectangleShape menuBar(sf::Vector2f(1024, 25));
+            // ============================================================
+            // LEFT TOP: Control Panel (Settings)
+            // ============================================================
+            drawPanel(window, 10.f, 40.f, 280.f, 520.f, sf::Color(40, 40, 50, 230));
+
+            float cx = 20.f, cy = 50.f;
+            drawText(window, uiState.font, "SIMULATION CONTROL", cx, cy, 16, sf::Color(200, 200, 255));
+            cy += 25;
+
+            // Time Control
+            drawText(window, uiState.font, "TIME CONTROL", cx, cy, 14, sf::Color(200, 200, 255));
+            cy += 20;
+            drawText(window, uiState.font, "Time Scale: " + std::to_string(uiState.params.timeScale).substr(0, 4) + "x", cx, cy, 13, sf::Color::White);
+            cy += 20;
+            // Time scale slider visual
+            drawPanel(window, cx, cy, 200.f, 10.f, sf::Color(50, 50, 70));
+            float sliderPos = cx + (uiState.params.timeScale - 0.1f) / (3.0f - 0.1f) * 200.f;
+            sf::RectangleShape slider(sf::Vector2f(10.f, 14.f));
+            slider.setPosition(sf::Vector2f(sliderPos, cy - 2.f));
+            slider.setFillColor(sf::Color(100, 200, 255));
+            window.draw(slider);
+            cy += 20;
+            drawText(window, uiState.font, isPaused ? "PAUSED" : "RUNNING", cx, cy, 13, isPaused ? sf::Color(255, 100, 100) : sf::Color(100, 255, 100));
+            cy += 20;
+            drawText(window, uiState.font, "[P] Toggle Pause", cx, cy, 11, sf::Color(150, 150, 150));
+            cy += 20;
+
+            // Initial Population
+            drawText(window, uiState.font, "INITIAL POPULATION", cx, cy, 14, sf::Color(200, 200, 255));
+            cy += 20;
+            drawText(window, uiState.font, "Flora: " + std::to_string(uiState.params.initialFlora) + "  [1/-] to change", cx, cy, 13, sf::Color::White);
+            cy += 18;
+            drawText(window, uiState.font, "Herbivore: " + std::to_string(uiState.params.initialHerbivore) + "  [2/-] to change", cx, cy, 13, sf::Color::White);
+            cy += 18;
+            drawText(window, uiState.font, "Predator: " + std::to_string(uiState.params.initialPredator) + "  [3/-] to change", cx, cy, 13, sf::Color::White);
+            cy += 25;
+
+            // Metabolism
+            drawText(window, uiState.font, "METABOLISM & ENERGY", cx, cy, 14, sf::Color(200, 200, 255));
+            cy += 20;
+            drawText(window, uiState.font, "Flora Photosynthesis: " + std::to_string(uiState.params.floraPhotosynthesis).substr(0, 4), cx, cy, 13, sf::Color::White);
+            cy += 18;
+            drawText(window, uiState.font, "Herbivore Metabolism: " + std::to_string(uiState.params.herbivoreMetabolism).substr(0, 5), cx, cy, 13, sf::Color::White);
+            cy += 18;
+            drawText(window, uiState.font, "Predator Metabolism: " + std::to_string(uiState.params.predatorMetabolism).substr(0, 5), cx, cy, 13, sf::Color::White);
+            cy += 25;
+
+            // Vision Ranges
+            drawText(window, uiState.font, "VISION RANGES", cx, cy, 14, sf::Color(200, 200, 255));
+            cy += 20;
+            drawText(window, uiState.font, "Herbivore Food: " + std::to_string(static_cast<int>(uiState.params.herbivoreFoodVision)), cx, cy, 13, sf::Color::White);
+            cy += 18;
+            drawText(window, uiState.font, "Herbivore Predator: " + std::to_string(static_cast<int>(uiState.params.herbivorePredatorVision)), cx, cy, 13, sf::Color::White);
+            cy += 18;
+            drawText(window, uiState.font, "Herbivore Mate: " + std::to_string(static_cast<int>(uiState.params.herbivoreMateVision)), cx, cy, 13, sf::Color::White);
+            cy += 18;
+            drawText(window, uiState.font, "Predator Vision: " + std::to_string(static_cast<int>(uiState.params.predatorVision)), cx, cy, 13, sf::Color::White);
+
+            cy += 15;
+            drawText(window, uiState.font, "Keys: P=Pause, +=/-=Time, L=Log, R=Reset", cx, cy, 11, sf::Color(150, 150, 150));
+
+            // ============================================================
+            // RIGHT TOP: Population Stats
+            // ============================================================
+            drawPanel(window, 740.f, 40.f, 270.f, 200.f, sf::Color(40, 40, 50, 230));
+
+            cx = 750.f, cy = 50.f;
+            drawText(window, uiState.font, "POPULATION STATS", cx, cy, 16, sf::Color(200, 200, 255));
+            cy += 25;
+
+            int flora = 0, herb = 0, pred = 0;
+            float totalEnergy = 0.f, avgEnergyFlora = 0.f, avgEnergyHerb = 0.f, avgEnergyPred = 0.f;
+            int countFlora = 0, countHerb = 0, countPred = 0;
+
+            for (const auto& e : entities) {
+                if (e->getType() == Entity::OrganismType::Flora) {
+                    flora++;
+                    avgEnergyFlora += e->getEnergy();
+                    countFlora++;
+                } else if (e->getType() == Entity::OrganismType::Herbivore) {
+                    herb++;
+                    avgEnergyHerb += e->getEnergy();
+                    countHerb++;
+                } else if (e->getType() == Entity::OrganismType::Predator) {
+                    pred++;
+                    avgEnergyPred += e->getEnergy();
+                    countPred++;
+                }
+                totalEnergy += e->getEnergy();
+            }
+
+            drawText(window, uiState.font, "Flora:        " + std::to_string(flora), cx, cy, 14, sf::Color(100, 255, 100));
+            cy += 20;
+            drawText(window, uiState.font, "Herbivore: " + std::to_string(herb), cx, cy, 14, sf::Color(255, 215, 0));
+            cy += 20;
+            drawText(window, uiState.font, "Predator:   " + std::to_string(pred), cx, cy, 14, sf::Color(255, 100, 100));
+            cy += 20;
+            drawText(window, uiState.font, "Total:       " + std::to_string(entities.size()), cx, cy, 14, sf::Color::White);
+
+            cy += 15;
+            drawText(window, uiState.font, "-------------------", cx, cy, 12, sf::Color(100, 100, 100));
+            cy += 15;
+
+            if (countFlora > 0) drawText(window, uiState.font, "Avg Flora Energy: " + std::to_string(static_cast<int>(avgEnergyFlora / countFlora)), cx, cy, 12, sf::Color::White);
+            cy += 16;
+            if (countHerb > 0) drawText(window, uiState.font, "Avg Herb Energy: " + std::to_string(static_cast<int>(avgEnergyHerb / countHerb)), cx, cy, 12, sf::Color::White);
+            cy += 16;
+            if (countPred > 0) drawText(window, uiState.font, "Avg Pred Energy: " + std::to_string(static_cast<int>(avgEnergyPred / countPred)), cx, cy, 12, sf::Color::White);
+            cy += 16;
+            drawText(window, uiState.font, "Total Energy: " + std::to_string(static_cast<int>(totalEnergy)), cx, cy, 12, sf::Color::White);
+
+            // ============================================================
+            // RIGHT MIDDLE: Experiments Panel
+            // ============================================================
+            drawPanel(window, 740.f, 250.f, 270.f, 300.f, sf::Color(40, 40, 50, 230));
+
+            cx = 750.f, cy = 260.f;
+            drawText(window, uiState.font, "EXPERIMENTS", cx, cy, 16, sf::Color(200, 200, 255));
+            cy += 25;
+
+            drawText(window, uiState.font, "ADD ENTITIES:", cx, cy, 13, sf::Color(200, 200, 255));
+            cy += 20;
+
+// Add 50 Flora
+            drawButton(window, uiState.font, "Add 50 Flora", cx, cy, 200.f, 25.f);
+            cy += 30;
+
+            // Add 20 Herbivore
+            drawButton(window, uiState.font, "Add 20 Herbivore", cx, cy, 200.f, 25.f);
+            cy += 30;
+
+            // Add 5 Predator
+            drawButton(window, uiState.font, "Add 5 Predator", cx, cy, 200.f, 25.f);
+            cy += 30;
+
+            cy += 10;
+            drawText(window, uiState.font, "KILL ENTITIES:", cx, cy, 13, sf::Color(255, 100, 100));
+            cy += 20;
+
+            drawButton(window, uiState.font, "Kill 50% Predators", cx, cy, 200.f, 25.f);
+            cy += 30;
+            drawButton(window, uiState.font, "Kill 50% Herbivores", cx, cy, 200.f, 25.f);
+            cy += 30;
+            drawButton(window, uiState.font, "Kill All Flora", cx, cy, 200.f, 25.f);
+            cy += 30;
+
+            cy += 10;
+            drawButton(window, uiState.font, "Reset Simulation", cx, cy, 200.f, 25.f);
+            cy += 30;
+
+            cy += 10;
+            drawText(window, uiState.font, "DATA EXPORT:", cx, cy, 13, sf::Color(200, 200, 255));
+            cy += 20;
+
+            drawButton(window, uiState.font, "Export State (CSV)", cx, cy, 200.f, 25.f);
+            cy += 30;
+
+            // Logging checkbox
+            std::string loggingStatusText = "Enable CSV Logging: " + std::string(uiState.isLogging ? "ON" : "OFF");
+            drawText(window, uiState.font, loggingStatusText, cx, cy, 12, uiState.isLogging ? sf::Color(100, 255, 100) : sf::Color(255, 100, 100));
+
+            // ============================================================
+            // LEFT BOTTOM: Graphs Panel
+            // ============================================================
+            drawPanel(window, 10.f, 570.f, 1000.f, 180.f, sf::Color(20, 20, 30, 240));
+
+            drawText(window, uiState.font, "POPULATION HISTORY", 20.f, 580.f, 16, sf::Color(200, 200, 255));
+
+            if (!uiState.floraHistory.empty()) {
+                float graphX = 20.f;
+                float graphY = 605.f;
+                float graphW = 980.f;
+                float graphH = 40.f;
+                float spacing = 5.f;
+
+                // Flora graph (green)
+                drawPanel(window, graphX, graphY, 980.f, graphH, sf::Color(0, 50, 0, 200));
+                drawGraphLine(window, uiState.floraHistory, graphX, graphY, 980.f, graphH, sf::Color(100, 255, 100));
+                drawText(window, uiState.font, "Flora (Green)", graphX + 5.f, graphY + 2.f, 11, sf::Color(100, 255, 100));
+
+                // Herbivore graph (gold)
+                drawPanel(window, graphX, graphY + graphH + 5.f, 980.f, graphH, sf::Color(50, 50, 0, 200));
+                drawGraphLine(window, uiState.herbivoreHistory, graphX, graphY + graphH + 5.f, 980.f, graphH, sf::Color(255, 215, 0));
+                drawText(window, uiState.font, "Herbivore (Gold)", graphX + 5.f, graphY + graphH + 7.f, 11, sf::Color(255, 215, 0));
+
+                // Predator graph (red)
+                drawPanel(window, graphX, graphY + 2 * (graphH + 5.f), 980.f, graphH, sf::Color(50, 0, 0, 200));
+                drawGraphLine(window, uiState.predatorHistory, graphX, graphY + 2 * (graphH + 5.f), 980.f, graphH, sf::Color(255, 100, 100));
+                drawText(window, uiState.font, "Predator (Red)", graphX + 5.f, graphY + 2 * (graphH + 5.f) + 2.f, 11, sf::Color(255, 100, 100));
+            } else {
+                drawText(window, uiState.font, "No data yet...", 20.f, 610.f, 14, sf::Color(150, 150, 150));
+            }
+
+            // ============================================================
+            // BOTTOM: Logging Panel
+            // ============================================================
+            drawPanel(window, 10.f, 760.f, 1000.f, 40.f, sf::Color(20, 20, 30, 240));
+            drawText(window, uiState.font, "CSV Logging: " + std::string(uiState.isLogging ? "ENABLED" : "DISABLED") + "  [L] Toggle  |  [E] Export State", 20.f, 770.f, 12, uiState.isLogging ? sf::Color(100, 255, 100) : sf::Color(255, 100, 100));
+
+            // ============================================================
+            // TOP: Menu Bar (drawn last so it's on top of everything)
+            // ============================================================
+            sf::RectangleShape menuBar(sf::Vector2f(1024.f, 25.f));
             menuBar.setFillColor(sf::Color(40, 40, 50));
             window.draw(menuBar);
-            
+
             sf::Text titleText(uiState.font, "Artificial Life - FSM Ecosystem", 14);
             titleText.setFillColor(sf::Color::White);
-            titleText.setPosition(sf::Vector2f(10, 4));
+            titleText.setPosition(sf::Vector2f(10.f, 4.f));
             window.draw(titleText);
-            
-            // Menu items
+
             sf::Text pauseText(uiState.font, isPaused ? "[P] PAUSED" : "[P] Running", 12);
             pauseText.setFillColor(isPaused ? sf::Color(255, 100, 100) : sf::Color(100, 255, 100));
-            pauseText.setPosition(sf::Vector2f(200, 4));
+            pauseText.setPosition(sf::Vector2f(200.f, 4.f));
             window.draw(pauseText);
-            
+
             sf::Text timeText(uiState.font, "[+/-] Time: " + std::to_string(uiState.params.timeScale).substr(0, 4) + "x", 12);
             timeText.setFillColor(sf::Color(200, 200, 200));
-            timeText.setPosition(sf::Vector2f(320, 4));
+            timeText.setPosition(sf::Vector2f(320.f, 4.f));
             window.draw(timeText);
-            
+
             sf::Text logText(uiState.font, "[L] Logging: " + std::string(uiState.isLogging ? "ON" : "OFF"), 12);
             logText.setFillColor(uiState.isLogging ? sf::Color(100, 255, 100) : sf::Color(255, 100, 100));
-            logText.setPosition(sf::Vector2f(500, 4));
+            logText.setPosition(sf::Vector2f(500.f, 4.f));
             window.draw(logText);
         }
 
