@@ -31,3 +31,8 @@ Release/
 
 # Temporary files
 *.tmp
+
+# Simulation logs
+*.csv
+simulation_log.csv
+simulation_state.csv
