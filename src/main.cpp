@@ -310,16 +310,31 @@ int main() {
                     );
                     
                     // Define button hit rectangles (must match render coordinates exactly)
-                    // Experiments panel buttons (x=750, y starts at 260, buttons at cy positions)
-                    sf::FloatRect btnAddFlora = makeRect(750.f, 280.f, 200.f, 25.f);
-                    sf::FloatRect btnAddHerb = makeRect(750.f, 310.f, 200.f, 25.f);
-                    sf::FloatRect btnAddPred = makeRect(750.f, 340.f, 200.f, 25.f);
-                    sf::FloatRect btnKillPred = makeRect(750.f, 370.f, 200.f, 25.f);
-                    sf::FloatRect btnKillHerb = makeRect(750.f, 400.f, 200.f, 25.f);
-                    sf::FloatRect btnKillFlora = makeRect(750.f, 430.f, 200.f, 25.f);
-                    sf::FloatRect btnReset = makeRect(750.f, 460.f, 200.f, 25.f);
-                    sf::FloatRect btnExport = makeRect(750.f, 503.f, 200.f, 25.f);
-                    sf::FloatRect btnLogToggle = makeRect(750.f, 533.f, 200.f, 20.f);
+                    // Experiments panel buttons (x=750, panel starts at y=250, content at y=260)
+                    // cy starts at 260: EXPERIMENTS(260)+25=285, ADD ENTITIES(285)+20=305
+                    // Add 50 Flora at cy=305, +30=335
+                    // Add 20 Herbivore at 335, +30=365
+                    // Add 5 Predator at 365, +30=395
+                    // cy += 10 => 405, KILL ENTITIES text at 405, +20=425
+                    // Kill 50% Predators at 425, +30=455
+                    // Kill 50% Herbivores at 455, +30=485
+                    // Kill All Flora at 485, +30=515
+                    // cy += 10 => 525
+                    // Reset at 525, +30=555
+                    // cy += 10 => 565, DATA EXPORT text, +20=585
+                    // Export at 585, +30=615
+                    // cy += 10 => 625, DATA EXPORT again (bug), +20=645, +30=655
+                    // Hide HUD at 655
+                    sf::FloatRect btnAddFlora = makeRect(750.f, 305.f, 200.f, 25.f);
+                    sf::FloatRect btnAddHerb = makeRect(750.f, 335.f, 200.f, 25.f);
+                    sf::FloatRect btnAddPred = makeRect(750.f, 365.f, 200.f, 25.f);
+                    sf::FloatRect btnKillPred = makeRect(750.f, 425.f, 200.f, 25.f);
+                    sf::FloatRect btnKillHerb = makeRect(750.f, 455.f, 200.f, 25.f);
+                    sf::FloatRect btnKillFlora = makeRect(750.f, 485.f, 200.f, 25.f);
+                    sf::FloatRect btnReset = makeRect(750.f, 525.f, 200.f, 25.f);
+                    sf::FloatRect btnExport = makeRect(750.f, 585.f, 200.f, 25.f);
+                    sf::FloatRect btnHideHUD = makeRect(750.f, 655.f, 200.f, 25.f);
+                    sf::FloatRect btnLogToggle = makeRect(750.f, 655.f, 200.f, 20.f);
                     
                     // Check each button
                     if (btnAddFlora.contains(mousePos)) {
