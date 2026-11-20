@@ -11,6 +11,14 @@
 #include "entities/Entity.h"
 #include "spatial/SpatialGrid.h"
 
+// Helper to create sf::FloatRect (SFML 3.0 uses position/size)
+inline sf::FloatRect makeRect(float left, float top, float width, float height) {
+    sf::FloatRect rect;
+    rect.position = {left, top};
+    rect.size = {width, height};
+    return rect;
+}
+
 // === CONSTANTS ===
 const int MAX_FLORA = 1000;
 const int MAX_HERBIVORE = 100;
@@ -225,6 +233,212 @@ int main() {
         while (std::optional<sf::Event> event = window.pollEvent()) {
             if (event->is<sf::Event::Closed>()) {
                 window.close();
+            }
+            // Keyboard shortcuts
+            else if (event->is<sf::Event::KeyPressed>()) {
+                auto key = event->getIf<sf::Event::KeyPressed>()->code;
+                
+                if (key == sf::Keyboard::Key::P) {
+                    uiState.params.isPaused = !uiState.params.isPaused;
+                }
+                else if (key == sf::Keyboard::Key::Equal) { // '=' key for '+'
+                    uiState.params.timeScale = std::min(3.0f, uiState.params.timeScale + 0.1f);
+                }
+                else if (key == sf::Keyboard::Key::Hyphen) { // '-' key
+                    uiState.params.timeScale = std::max(0.1f, uiState.params.timeScale - 0.1f);
+                }
+                else if (key == sf::Keyboard::Key::L) {
+                    uiState.isLogging = !uiState.isLogging;
+                    if (uiState.isLogging && !uiState.logFile.is_open()) {
+                        uiState.logFile.open("simulation_log.csv");
+                        if (uiState.logFile.is_open()) {
+                            uiState.logFile << "Time,Flora,Herbivore,Predator\n";
+                        }
+                    }
+                    else if (!uiState.isLogging && uiState.logFile.is_open()) {
+                        uiState.logFile.close();
+                    }
+                }
+                else if (key == sf::Keyboard::Key::R) {
+                    // Reset simulation
+                    entities.clear();
+                    // Recreate initial population
+                    for (int i = 0; i < uiState.params.initialFlora; ++i) {
+                        float x = static_cast<float>(std::rand() % 1024);
+                        float y = static_cast<float>(std::rand() % 768);
+                        auto flora = std::make_unique<Entity>(sf::Vector2f(x, y), sf::Vector2f(0.f, 0.f), Entity::OrganismType::Flora);
+                        flora->addEnergy(INITIAL_FLORA_ENERGY);
+                        entities.push_back(std::move(flora));
+                    }
+                    for (int i = 0; i < uiState.params.initialHerbivore; ++i) {
+                        float x = static_cast<float>(std::rand() % 1024);
+                        float y = static_cast<float>(std::rand() % 768);
+                        float vx = static_cast<float>((std::rand() % 300) - 150);
+                        float vy = static_cast<float>((std::rand() % 300) - 150);
+                        auto herb = std::make_unique<Entity>(sf::Vector2f(x, y), sf::Vector2f(vx, vy), Entity::OrganismType::Herbivore);
+                        herb->addEnergy(INITIAL_HERBIVORE_ENERGY);
+                        entities.push_back(std::move(herb));
+                    }
+                    for (int i = 0; i < uiState.params.initialPredator; ++i) {
+                        float x = static_cast<float>(std::rand() % 1024);
+                        float y = static_cast<float>(std::rand() % 768);
+                        float vx = static_cast<float>((std::rand() % 200) - 100);
+                        float vy = static_cast<float>((std::rand() % 200) - 100);
+                        auto pred = std::make_unique<Entity>(sf::Vector2f(x, y), sf::Vector2f(vx, vy), Entity::OrganismType::Predator);
+                        pred->addEnergy(INITIAL_PREDATOR_ENERGY);
+                        entities.push_back(std::move(pred));
+                    }
+                    // Clear history
+                    uiState.floraHistory.clear();
+                    uiState.herbivoreHistory.clear();
+                    uiState.predatorHistory.clear();
+                    uiState.floraHistory.reserve(uiState.maxHistoryPoints);
+                    uiState.herbivoreHistory.reserve(uiState.maxHistoryPoints);
+                    uiState.predatorHistory.reserve(uiState.maxHistoryPoints);
+                }
+            }
+            // Mouse click handling
+            else if (event->is<sf::Event::MouseButtonPressed>()) {
+                if (event->getIf<sf::Event::MouseButtonPressed>()->button == sf::Mouse::Button::Left) {
+                    sf::Vector2f mousePos = window.mapPixelToCoords(
+                        event->getIf<sf::Event::MouseButtonPressed>()->position
+                    );
+                    
+                    // Define button hit rectangles (must match render coordinates exactly)
+                    // Experiments panel buttons (x=750, y starts at 260, buttons at cy positions)
+                    sf::FloatRect btnAddFlora = makeRect(750.f, 280.f, 200.f, 25.f);
+                    sf::FloatRect btnAddHerb = makeRect(750.f, 310.f, 200.f, 25.f);
+                    sf::FloatRect btnAddPred = makeRect(750.f, 340.f, 200.f, 25.f);
+                    sf::FloatRect btnKillPred = makeRect(750.f, 370.f, 200.f, 25.f);
+                    sf::FloatRect btnKillHerb = makeRect(750.f, 400.f, 200.f, 25.f);
+                    sf::FloatRect btnKillFlora = makeRect(750.f, 430.f, 200.f, 25.f);
+                    sf::FloatRect btnReset = makeRect(750.f, 460.f, 200.f, 25.f);
+                    sf::FloatRect btnExport = makeRect(750.f, 503.f, 200.f, 25.f);
+                    sf::FloatRect btnLogToggle = makeRect(750.f, 533.f, 200.f, 20.f);
+                    
+                    // Check each button
+                    if (btnAddFlora.contains(mousePos)) {
+                        for (int i = 0; i < 50; ++i) {
+                            float x = static_cast<float>(std::rand() % 1024);
+                            float y = static_cast<float>(std::rand() % 768);
+                            auto flora = std::make_unique<Entity>(sf::Vector2f(x, y), sf::Vector2f(0.f, 0.f), Entity::OrganismType::Flora);
+                            flora->addEnergy(INITIAL_FLORA_ENERGY);
+                            entities.push_back(std::move(flora));
+                        }
+                    }
+                    else if (btnAddHerb.contains(mousePos)) {
+                        for (int i = 0; i < 20; ++i) {
+                            float x = static_cast<float>(std::rand() % 1024);
+                            float y = static_cast<float>(std::rand() % 768);
+                            float vx = static_cast<float>((std::rand() % 300) - 150);
+                            float vy = static_cast<float>((std::rand() % 300) - 150);
+                            auto herb = std::make_unique<Entity>(sf::Vector2f(x, y), sf::Vector2f(vx, vy), Entity::OrganismType::Herbivore);
+                            herb->addEnergy(INITIAL_HERBIVORE_ENERGY);
+                            entities.push_back(std::move(herb));
+                        }
+                    }
+                    else if (btnAddPred.contains(mousePos)) {
+                        for (int i = 0; i < 5; ++i) {
+                            float x = static_cast<float>(std::rand() % 1024);
+                            float y = static_cast<float>(std::rand() % 768);
+                            float vx = static_cast<float>((std::rand() % 200) - 100);
+                            float vy = static_cast<float>((std::rand() % 200) - 100);
+                            auto pred = std::make_unique<Entity>(sf::Vector2f(x, y), sf::Vector2f(vx, vy), Entity::OrganismType::Predator);
+                            pred->addEnergy(INITIAL_PREDATOR_ENERGY);
+                            entities.push_back(std::move(pred));
+                        }
+                    }
+                    else if (btnKillPred.contains(mousePos)) {
+                        int totalPred = 0;
+                        for (const auto& e : entities) if (e->getType() == Entity::OrganismType::Predator) totalPred++;
+                        int toKill = totalPred / 2;
+                        int killed = 0;
+                        for (auto& e : entities) {
+                            if (e->getType() == Entity::OrganismType::Predator && killed < toKill) {
+                                e->addEnergy(-10000.f);
+                                killed++;
+                            }
+                        }
+                    }
+                    else if (btnKillHerb.contains(mousePos)) {
+                        int totalHerb = 0;
+                        for (const auto& e : entities) if (e->getType() == Entity::OrganismType::Herbivore) totalHerb++;
+                        int toKill = totalHerb / 2;
+                        int killed = 0;
+                        for (auto& e : entities) {
+                            if (e->getType() == Entity::OrganismType::Herbivore && killed < toKill) {
+                                e->addEnergy(-10000.f);
+                                killed++;
+                            }
+                        }
+                    }
+                    else if (btnKillFlora.contains(mousePos)) {
+                        for (auto& e : entities) {
+                            if (e->getType() == Entity::OrganismType::Flora) {
+                                e->addEnergy(-10000.f);
+                            }
+                        }
+                    }
+                    else if (btnReset.contains(mousePos)) {
+                        entities.clear();
+                        // Recreate initial population
+                        for (int i = 0; i < uiState.params.initialFlora; ++i) {
+                            float x = static_cast<float>(std::rand() % 1024);
+                            float y = static_cast<float>(std::rand() % 768);
+                            auto flora = std::make_unique<Entity>(sf::Vector2f(x, y), sf::Vector2f(0.f, 0.f), Entity::OrganismType::Flora);
+                            flora->addEnergy(INITIAL_FLORA_ENERGY);
+                            entities.push_back(std::move(flora));
+                        }
+                        for (int i = 0; i < uiState.params.initialHerbivore; ++i) {
+                            float x = static_cast<float>(std::rand() % 1024);
+                            float y = static_cast<float>(std::rand() % 768);
+                            float vx = static_cast<float>((std::rand() % 300) - 150);
+                            float vy = static_cast<float>((std::rand() % 300) - 150);
+                            auto herb = std::make_unique<Entity>(sf::Vector2f(x, y), sf::Vector2f(vx, vy), Entity::OrganismType::Herbivore);
+                            herb->addEnergy(INITIAL_HERBIVORE_ENERGY);
+                            entities.push_back(std::move(herb));
+                        }
+                        for (int i = 0; i < uiState.params.initialPredator; ++i) {
+                            float x = static_cast<float>(std::rand() % 1024);
+                            float y = static_cast<float>(std::rand() % 768);
+                            float vx = static_cast<float>((std::rand() % 200) - 100);
+                            float vy = static_cast<float>((std::rand() % 200) - 100);
+                            auto pred = std::make_unique<Entity>(sf::Vector2f(x, y), sf::Vector2f(vx, vy), Entity::OrganismType::Predator);
+                            pred->addEnergy(INITIAL_PREDATOR_ENERGY);
+                            entities.push_back(std::move(pred));
+                        }
+                        // Clear history
+                        uiState.floraHistory.clear();
+                        uiState.herbivoreHistory.clear();
+                        uiState.predatorHistory.clear();
+                    }
+                    else if (btnExport.contains(mousePos)) {
+                        std::ofstream file("simulation_state.csv");
+                        if (file.is_open()) {
+                            file << "Type,PositionX,PositionY,VelocityX,VelocityY,Energy,MaxSpeed,Size\n";
+                            for (const auto& e : entities) {
+                                file << static_cast<int>(e->getType()) << ","
+                                     << e->getPosition().x << "," << e->getPosition().y << ","
+                                     << e->getVelocity().x << "," << e->getVelocity().y << ","
+                                     << e->getEnergy() << "," << e->getGenome().maxSpeed << ","
+                                     << e->getGenome().size << "\n";
+                            }
+                            file.close();
+                        }
+                    }
+                    else if (btnLogToggle.contains(mousePos)) {
+                        uiState.isLogging = !uiState.isLogging;
+                        if (uiState.isLogging && !uiState.logFile.is_open()) {
+                            uiState.logFile.open("simulation_log.csv");
+                            if (uiState.logFile.is_open()) {
+                                uiState.logFile << "Time,Flora,Herbivore,Predator\n";
+                            }
+                        }
+                        else if (!uiState.isLogging && uiState.logFile.is_open()) {
+                            uiState.logFile.close();
+                        }
+                    }
+                }
             }
         }
 
@@ -697,7 +911,7 @@ int main() {
             cy += 16;
             drawText(window, uiState.font, "Total Energy: " + std::to_string(static_cast<int>(totalEnergy)), cx, cy, 12, sf::Color::White);
 
-            // ============================================================
+// ============================================================
             // RIGHT MIDDLE: Experiments Panel
             // ============================================================
             drawPanel(window, 740.f, 250.f, 270.f, 300.f, sf::Color(40, 40, 50, 230));
@@ -710,37 +924,45 @@ int main() {
             cy += 20;
 
 // Add 50 Flora
-            drawButton(window, uiState.font, "Add 50 Flora", cx, cy, 200.f, 25.f);
+            bool hoveredAddFlora = makeRect(cx, cy, 200.f, 25.f).contains(mousePosF);
+            drawButton(window, uiState.font, "Add 50 Flora", cx, cy, 200.f, 25.f, hoveredAddFlora, false);
             cy += 30;
 
             // Add 20 Herbivore
-            drawButton(window, uiState.font, "Add 20 Herbivore", cx, cy, 200.f, 25.f);
+            bool hoveredAddHerb = makeRect(cx, cy, 200.f, 25.f).contains(mousePosF);
+            drawButton(window, uiState.font, "Add 20 Herbivore", cx, cy, 200.f, 25.f, hoveredAddHerb, false);
             cy += 30;
 
             // Add 5 Predator
-            drawButton(window, uiState.font, "Add 5 Predator", cx, cy, 200.f, 25.f);
+            bool hoveredAddPred = makeRect(cx, cy, 200.f, 25.f).contains(mousePosF);
+            drawButton(window, uiState.font, "Add 5 Predator", cx, cy, 200.f, 25.f, hoveredAddPred, false);
             cy += 30;
 
             cy += 10;
             drawText(window, uiState.font, "KILL ENTITIES:", cx, cy, 13, sf::Color(255, 100, 100));
             cy += 20;
 
-            drawButton(window, uiState.font, "Kill 50% Predators", cx, cy, 200.f, 25.f);
+            bool hoveredKillPred = makeRect(cx, cy, 200.f, 25.f).contains(mousePosF);
+            drawButton(window, uiState.font, "Kill 50% Predators", cx, cy, 200.f, 25.f, hoveredKillPred, false);
             cy += 30;
-            drawButton(window, uiState.font, "Kill 50% Herbivores", cx, cy, 200.f, 25.f);
+            bool hoveredKillHerb = makeRect(cx, cy, 200.f, 25.f).contains(mousePosF);
+            drawButton(window, uiState.font, "Kill 50% Herbivores", cx, cy, 200.f, 25.f, hoveredKillHerb, false);
             cy += 30;
-            drawButton(window, uiState.font, "Kill All Flora", cx, cy, 200.f, 25.f);
+            bool hoveredKillFlora = makeRect(cx, cy, 2.0f, 25.f).contains(mousePosF);
+            drawButton(window, uiState.font, "Kill All Flora", cx, cy, 200.f, 25.f, hoveredKillFlora, false);
             cy += 30;
 
             cy += 10;
-            drawButton(window, uiState.font, "Reset Simulation", cx, cy, 200.f, 25.f);
+            bool hoveredReset = makeRect(cx, cy, 200.f, 25.f).contains(mousePosF);
+            drawButton(window, uiState.font, "Reset Simulation", cx, cy, 200.f, 25.f, hoveredReset, false);
             cy += 30;
 
             cy += 10;
             drawText(window, uiState.font, "DATA EXPORT:", cx, cy, 13, sf::Color(200, 200, 255));
             cy += 20;
 
-            drawButton(window, uiState.font, "Export State (CSV)", cx, cy, 200.f, 25.f);
+            bool hoveredExport = makeRect(cx, cy, 200.f, 25.f).contains(mousePosF);
+            drawButton(window, uiState.font, "Export State (CSV)", cx, cy, 200.f, 25.f, hoveredExport, false);
             cy += 30;
 
             // Logging checkbox
