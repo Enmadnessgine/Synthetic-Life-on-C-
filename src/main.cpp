@@ -89,6 +89,7 @@ struct UIState {
     bool showExperimentPanel = true;
     bool showLoggingPanel = true;
     bool isLogging = false;
+    bool showUI = true; // Toggle HUD visibility
     
     std::vector<float> floraHistory;
     std::vector<float> herbivoreHistory;
@@ -295,6 +296,10 @@ int main() {
                     uiState.floraHistory.reserve(uiState.maxHistoryPoints);
                     uiState.herbivoreHistory.reserve(uiState.maxHistoryPoints);
                     uiState.predatorHistory.reserve(uiState.maxHistoryPoints);
+                }
+                else if (key == sf::Keyboard::Key::H) {
+                    // Toggle HUD visibility
+                    uiState.showUI = !uiState.showUI;
                 }
             }
             // Mouse click handling
@@ -800,9 +805,10 @@ int main() {
 
         // --- UI Panels (drawn over entities, under menu bar) ---
         if (uiState.fontLoaded) {
-            // ============================================================
-            // LEFT TOP: Control Panel (Settings)
-            // ============================================================
+            if (uiState.showUI) {
+                // ============================================================
+                // LEFT TOP: Control Panel (Settings)
+                // ============================================================
             drawPanel(window, 10.f, 40.f, 280.f, 520.f, sf::Color(40, 40, 50, 230));
 
             float cx = 20.f, cy = 50.f;
@@ -965,6 +971,17 @@ int main() {
             drawButton(window, uiState.font, "Export State (CSV)", cx, cy, 200.f, 25.f, hoveredExport, false);
             cy += 30;
 
+            cy += 10;
+            drawText(window, uiState.font, "DATA EXPORT:", cx, cy, 13, sf::Color(200, 200, 255));
+            cy += 20;
+
+            cy += 30;
+
+            // Hide HUD toggle
+            bool hoveredHideHUD = makeRect(cx, cy, 200.f, 25.f).contains(mousePosF);
+            drawButton(window, uiState.font, uiState.showUI ? "Hide HUD [H]" : "Show HUD [H]", cx, cy, 200.f, 25.f, hoveredReset, false);
+            cy += 30;
+
             // Logging checkbox
             std::string loggingStatusText = "Enable CSV Logging: " + std::string(uiState.isLogging ? "ON" : "OFF");
             drawText(window, uiState.font, loggingStatusText, cx, cy, 12, uiState.isLogging ? sf::Color(100, 255, 100) : sf::Color(255, 100, 100));
@@ -1005,7 +1022,8 @@ int main() {
             // BOTTOM: Logging Panel
             // ============================================================
             drawPanel(window, 10.f, 760.f, 1000.f, 40.f, sf::Color(20, 20, 30, 240));
-            drawText(window, uiState.font, "CSV Logging: " + std::string(uiState.isLogging ? "ENABLED" : "DISABLED") + "  [L] Toggle  |  [E] Export State", 20.f, 770.f, 12, uiState.isLogging ? sf::Color(100, 255, 100) : sf::Color(255, 100, 100));
+drawText(window, uiState.font, "CSV Logging: " + std::string(uiState.isLogging ? "ENABLED" : "DISABLED") + "  [L] Toggle  |  [E] Export State", 20.f, 770.f, 12, uiState.isLogging ? sf::Color(100, 255, 100) : sf::Color(255, 100, 100));
+            }
 
             // ============================================================
             // TOP: Menu Bar (drawn last so it's on top of everything)
