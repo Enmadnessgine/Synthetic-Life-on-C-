@@ -85,7 +85,7 @@ std::unique_ptr<Entity> AsexualStrategy::reproduce(const Entity& parent, float m
 // Asexual reproduce: just returns a copy of parent1 for sexual strategy
 std::unique_ptr<Entity> AsexualStrategy::reproduce(const Entity& parent1, const Entity& parent2, float mutationRate) {
     return std::make_unique<Entity>(parent1.getPosition(), parent1.getVelocity());
-}
+} 
 
 bool AsexualStrategy::shouldReproduce(const Entity& entity, float dt) {
     static float timer = 0.0f;
