@@ -730,11 +730,11 @@ int main() {
                         entity->addEnergy(-energyToPass);
 
                         Genome childGenome = entity->getGenome();
-                        childGenome.maxSpeed += static_cast<float>((std::rand() % 21) - 10);
-                        childGenome.size += static_cast<float>((std::rand() % 5) - 2);
+                        childGenome.maxSpeed += static_cast<float>((std::rand() % 21) - 10); // mutation  -10 to +10
+                        childGenome.size += static_cast<float>((std::rand() % 5) - 2); // mutation -2 to +2
                         
                         sf::Vector2f childPos = entity->getPosition() + sf::Vector2f(
-                            static_cast<float>(std::rand() % 40 - 20), 
+                            static_cast<float>(std::rand() % 40 - 20), // random offset spawn child -20 to +20
                             static_cast<float>(std::rand() % 40 - 20)
                         );
                         

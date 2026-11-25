@@ -8,9 +8,6 @@ Entity::Entity(sf::Vector2f position, sf::Vector2f velocity, OrganismType type)
 
     switch (type) {
         case OrganismType::Flora:
-            // Флора: маленькі напівпрозорі зелені кружечки (фоновий шар)
-            // Радіус 9, прозорість 210 — добре видно на екрані.
-            // Флора нерухома, не має поля зору.
             shape_.setRadius(9.f);
             shape_.setFillColor(sf::Color(0, 255, 0, 210));
             shape_.setOutlineThickness(0.f);
@@ -18,26 +15,20 @@ Entity::Entity(sf::Vector2f position, sf::Vector2f velocity, OrganismType type)
             genome_.visionRange = 0.f;
             break;
         case OrganismType::Herbivore:
-            // Травоїдні: великі яскраві жовті/золоті кружечки з помаранчевим контуром
-            // Радіус 12, прозорість 220 — середній шар візуальної ієрархії.
-            // Вища максимальна швидкість (220) щоб врятовуватися від хижаків.
             shape_.setRadius(12.f);
             shape_.setFillColor(sf::Color(255, 215, 0, 220));
             shape_.setOutlineColor(sf::Color(255, 140, 0, 220));
             shape_.setOutlineThickness(2.f);
-            genome_.maxSpeed = 220.f;   // Збільшено з 150 до 220 для врятовування
-            genome_.visionRange = 200.f; // Поле зору для пошуку флори
+            genome_.maxSpeed = 220.f;
+            genome_.visionRange = 200.f;
             break;
         case OrganismType::Predator:
-            // Хижаки: великі яскраво-червоні кружечки з жовтим контуром (верхній шар)
-            // Радіус 18, непрозорі — завжди видно поверх усіх інших істот.
-            // Швидкість 200 — трохи нижче за травоїдних у режимі втечі (260).
             shape_.setRadius(18.f);
             shape_.setFillColor(sf::Color(255, 0, 0, 255));
             shape_.setOutlineColor(sf::Color(255, 255, 0, 255));
             shape_.setOutlineThickness(3.f);
-            genome_.maxSpeed = 200.f;   // Трохи нижче за FLEE-швидкість травоїдних
-            genome_.visionRange = 250.f; // Поле зору для пошуку здобичі (не весь екран!)
+            genome_.maxSpeed = 200.f;
+            genome_.visionRange = 250.f;
             break;
     }
 }
@@ -45,7 +36,7 @@ Entity::Entity(sf::Vector2f position, sf::Vector2f velocity, OrganismType type)
 void Entity::setHerbivoreState(HerbivoreState state) {
     if (currentHerbivoreState != state) {
         currentHerbivoreState = state;
-        // Відладочний вивід при зміні стану (для викладача)
+        // Відладочний вивід при зміні стану
         // std::cout << "[FSM] Herbivore state changed to: " << static_cast<int>(state) << std::endl;
     }
 }
@@ -53,7 +44,7 @@ void Entity::setHerbivoreState(HerbivoreState state) {
 void Entity::setPredatorState(PredatorState state) {
     if (currentPredatorState != state) {
         currentPredatorState = state;
-        // Відладочний вивід при зміні стану (для викладача)
+        // Відладочний вивід при зміні стану
         // std::cout << "[FSM] Predator state changed to: " << static_cast<int>(state) << std::endl;
     }
 }
