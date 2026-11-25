@@ -256,18 +256,6 @@ const float HERBIVORE_MATE_VISION = 150.f;
 
 ---
 
-## 🛣 Roadmap
-
-- [ ] Sexual reproduction integration
-- [ ] Species speciation (divergent evolution)
-- [ ] Environmental factors (seasons, disasters)
-- [ ] Neural network brains for entities
-- [ ] Multi-threaded spatial grid
-- [ ] Save/Load simulation state
-- [ ] WebAssembly port
-
----
-
 ## 📜 License
 
 MIT License — See [LICENSE](LICENSE) for details.
